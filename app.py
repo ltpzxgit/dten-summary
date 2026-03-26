@@ -105,7 +105,7 @@ col1, col2, col3, col4 = st.columns(4)
 with col1:
     dten_file = st.file_uploader("DTEN", type=["xlsx", "csv"])
 with col2:
-    tcap_file = st.file_uploader("TCAP", type=["xlsx", "csv"])
+    tcap_file = st.file_uploader("DTENTCAP", type=["xlsx", "csv"])
 with col3:
     req_file = st.file_uploader("ProvisioningRequester", type=["xlsx", "csv"])
 with col4:
@@ -306,10 +306,10 @@ if dten_file and tcap_file and req_file and res_file:
         st.markdown(card("DTENTCAP", tcap_total, tcap_error), unsafe_allow_html=True)
 
     with col3:
-        st.markdown(card("REQ", req_total, req_error), unsafe_allow_html=True)
+        st.markdown(card("ProvisioningRequester", req_total, req_error), unsafe_allow_html=True)
 
     with col4:
-        st.markdown(card("RES", res_total, res_error), unsafe_allow_html=True)
+        st.markdown(card("ProvisioningResponder", res_total, res_error), unsafe_allow_html=True)
 
     # =========================
     # TABLE
