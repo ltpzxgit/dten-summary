@@ -94,17 +94,16 @@ def process_file(df):
 
                 log_map[corr_id]["deviceids"] = []
 
-    # กัน empty
     if not ordered_rows:
         return pd.DataFrame(columns=["No.", "DeviceID", "RequestID", "ProStatus", "Carrier"])
 
     result_df = pd.DataFrame(ordered_rows)
 
-    # 🔥 clean ก่อน dedupe
+    # clean
     result_df["DeviceID"] = result_df["DeviceID"].astype(str).str.strip()
     result_df["RequestID"] = result_df["RequestID"].astype(str).str.strip()
 
-    # 🔥 กันเบิ้ลจริง (ใช้ key หลัก)
+    # dedupe
     result_df = result_df.drop_duplicates(subset=["DeviceID", "RequestID"])
 
     # carrier
@@ -153,6 +152,20 @@ if file1 and file2:
     result_df2 = process_file(df_raw2)
 
     # =========================
+    # Compare DeviceID
+    # =========================
+    deviceid_set_sheet2 = set(result_df2["DeviceID"].astype(str).str.strip())
+
+    result_df1["Sent to TCAP Cloud"] = result_df1["DeviceID"].astype(str).str.strip().apply(
+        lambda x: "Yes" if x in deviceid_set_sheet2 else "No"
+    )
+
+    # จัด column
+    result_df1 = result_df1[[
+        "No.", "DeviceID", "RequestID", "ProStatus", "Carrier", "Sent to TCAP Cloud"
+    ]]
+
+    # =========================
     # Show
     # =========================
     st.subheader("📄 Sheet1 (DTENLinkage)")
@@ -166,7 +179,6 @@ if file1 and file2:
     # =========================
     output = BytesIO()
 
-    # 👉 ตัด column Sheet2
     result_df2_export = result_df2[["No.", "DeviceID", "RequestID"]].copy()
 
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
