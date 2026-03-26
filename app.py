@@ -5,155 +5,120 @@ from io import BytesIO
 
 st.set_page_config(page_title="ITOSE - DTEN", layout="wide")
 
-st.title("ITOSE Tools - DTEN Linkage (Block Parser)")
+st.title("ITOSE Tools - DTEN Linkage")
 
-# =========================
 # Regex
-# =========================
 DATETIME_ID_REGEX = r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ([a-f0-9\-]{36})'
-REQUEST_ID_REGEX = r'Request ID[:\s]+([a-f0-9\-]{36})'
+LDCMID_REGEX = r'LDCMID=([A-Za-z0-9\-]+)'
+REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
+PROSTATUS_REGEX = r'ProStatus=([A-Za-z0-9_]+)'
 
-LDCMID_BLOCK_REGEX = r'"LDCMID"\s*:\s*"([^"]+)"'
-STATUS_BLOCK_REGEX = r'"StatusReg"\s*:\s*"([^"]+)"'
-
-# =========================
-# Extract
-# =========================
 def extract_corr_id(text):
     m = re.search(DATETIME_ID_REGEX, text)
     return m.group(1) if m else None
+
+def extract_ldcmids(text):
+    return re.findall(LDCMID_REGEX, text)
 
 def extract_request_id(text):
     m = re.search(REQUEST_ID_REGEX, text)
     return m.group(1) if m else None
 
-def extract_ldcmid(text):
-    m = re.search(LDCMID_BLOCK_REGEX, text)
-    return m.group(1) if m else None
-
-def extract_status(text):
-    m = re.search(STATUS_BLOCK_REGEX, text)
+def extract_prostatus(text):
+    m = re.search(PROSTATUS_REGEX, text)
     return m.group(1) if m else None
 
 def get_carrier(deviceid):
-    if str(deviceid).startswith(("A", "Z")):
+    if deviceid.startswith(("A", "Z")):
         return "AIS"
     elif deviceid == "" or pd.isna(deviceid):
         return "-"
     else:
         return "TRUE"
 
-# =========================
-# CORE (เหมือน repo logic)
-# =========================
-def process_file(df):
+uploaded_file = st.file_uploader("📥 Upload Excel / CSV", type=["xlsx", "csv"])
+
+if uploaded_file:
+    if uploaded_file.name.endswith(".csv"):
+        df = pd.read_csv(uploaded_file)
+    else:
+        df = pd.read_excel(uploaded_file)
+
+    st.write("📊 Preview", df.head())
 
     log_map = {}
     ordered_rows = []
 
+    # 🔥 อ่านตามลำดับจริง
     for col in df.columns:
         for val in df[col]:
             if pd.isna(val):
                 continue
 
             text = str(val)
-
             corr_id = extract_corr_id(text)
+
             if not corr_id:
                 continue
 
-            # init session
             if corr_id not in log_map:
                 log_map[corr_id] = {
-                    "request_id": None
+                    "deviceids": [],
+                    "request_id": None,
+                    "prostatus": None
                 }
 
-            # ✅ copy logic จาก repo
+            # device
+            ldcmids = extract_ldcmids(text)
+            if ldcmids:
+                log_map[corr_id]["deviceids"].extend(ldcmids)
+
+            # request id
             req_id = extract_request_id(text)
             if req_id:
                 log_map[corr_id]["request_id"] = req_id
 
-            current_request = log_map[corr_id]["request_id"]
+            # prostatus
+            ps = extract_prostatus(text)
+            if ps:
+                log_map[corr_id]["prostatus"] = ps
 
-            # block extract
-            ldcmid = extract_ldcmid(text)
-            status = extract_status(text)
-
-            if ldcmid:
-                ordered_rows.append({
-                    "DeviceID": ldcmid.strip(),
-                    "RequestID": current_request if current_request else "-",
-                    "DTENLinkage Result": status if status else "-"
-                })
-
-    if not ordered_rows:
-        return pd.DataFrame(columns=["No.", "DeviceID", "RequestID", "Carrier", "DTENLinkage Result"])
+            # 🔥 ถ้าครบแล้ว → push ทันที (รักษาลำดับ)
+            data = log_map[corr_id]
+            if data["deviceids"] and data["request_id"]:
+                for d in data["deviceids"]:
+                    ordered_rows.append({
+                        "deviceid": d,
+                        "request_id": data["request_id"],
+                        "ProStatus": data["prostatus"]
+                    })
+                # กันซ้ำ
+                log_map[corr_id]["deviceids"] = []
 
     result_df = pd.DataFrame(ordered_rows)
 
-    # clean
-    result_df["DeviceID"] = result_df["DeviceID"].astype(str).str.strip()
-    result_df["RequestID"] = result_df["RequestID"].astype(str).str.strip()
+    # ลบซ้ำ (แต่ยังรักษา order)
+    result_df = result_df.drop_duplicates()
 
-    # dedupe (เหมือน repo)
-    result_df = result_df.drop_duplicates(subset=["DeviceID", "RequestID"])
-
-    # carrier
-    result_df["Carrier"] = result_df["DeviceID"].apply(get_carrier)
-
-    # fill
-    result_df["DTENLinkage Result"] = result_df["DTENLinkage Result"].fillna("-")
+    # Carrier
+    result_df["Carrier"] = result_df["deviceid"].apply(get_carrier)
 
     # No.
     result_df = result_df.reset_index(drop=True)
     result_df.insert(0, "No.", result_df.index + 1)
 
-    # columns
-    result_df = result_df[[
-        "No.", "DeviceID", "RequestID", "Carrier", "DTENLinkage Result"
-    ]]
+    st.success(f"✅ Extracted {len(result_df)} records")
 
-    return result_df
+    st.dataframe(result_df)
 
-
-# =========================
-# Load File
-# =========================
-def load_file(file):
-    if file.name.endswith(".csv"):
-        return pd.read_csv(file)
-    else:
-        return pd.read_excel(file)
-
-
-# =========================
-# UI
-# =========================
-file1 = st.file_uploader("📥 Upload File", type=["xlsx", "csv"])
-
-if file1:
-
-    df_raw = load_file(file1)
-
-    st.success("✅ Upload สำเร็จ")
-
-    with st.expander("🔍 Debug Preview"):
-        st.write(df_raw.head())
-
-    result_df = process_file(df_raw)
-
-    st.subheader("📄 DTENLinkage Result")
-    st.dataframe(result_df, use_container_width=True)
-
-    # export
+    # Download
     output = BytesIO()
-
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        result_df.to_excel(writer, sheet_name="DTENLinkage", index=False)
+    result_df.to_excel(output, index=False, engine='openpyxl')
+    output.seek(0)
 
     st.download_button(
         label="📥 Download Excel",
-        data=output.getvalue(),
-        file_name="dten_block_extract.xlsx",
+        data=output,
+        file_name="dten-summary.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
