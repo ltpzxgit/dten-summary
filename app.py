@@ -76,8 +76,8 @@ if uploaded_file:
             if data["pairs"] and data["request_id"]:
                 for d, status in data["pairs"]:
                     ordered_rows.append({
-                        "DeviceID": d,
-                        "RequestID": data["request_id"],
+                        "DeviceID": d,                         # 🔥 เปลี่ยนตรงนี้
+                        "Request ID": data["request_id"],
                         "Result": status if status else "-"
                     })
 
@@ -85,7 +85,7 @@ if uploaded_file:
 
     result_df = pd.DataFrame(ordered_rows).drop_duplicates()
 
-    result_df["Carrier"] = result_df["deviceid"].apply(get_carrier)
+    result_df["Carrier"] = result_df["DeviceID"].apply(get_carrier)  # 🔥 เปลี่ยนตรงนี้ด้วย
 
     result_df = result_df.reset_index(drop=True)
     result_df.insert(0, "No.", result_df.index + 1)
@@ -94,8 +94,11 @@ if uploaded_file:
 
     st.dataframe(result_df)
 
+    # Export Excel
     output = BytesIO()
-    result_df.to_excel(output, index=False, engine='openpyxl')
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        result_df.to_excel(writer, index=False, sheet_name='DTENLinkage')
+
     output.seek(0)
 
     st.download_button(
