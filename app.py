@@ -8,12 +8,12 @@ st.set_page_config(page_title="ITOSE - DTEN", layout="wide")
 st.title("ITOSE Tools - DTEN Linkage (Dual Extract)")
 
 # =========================
-# Regex
+# Regex (รองรับหลาย format)
 # =========================
 DATETIME_ID_REGEX = r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ([a-f0-9\-]{36})'
-LDCMID_REGEX = r'LDCMID=([A-Za-z0-9\-]+)'
-REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
-PROSTATUS_REGEX = r'ProStatus=([A-Za-z0-9_]+)'
+LDCMID_REGEX = r'(?:LDCMID|deviceId)[=:"\s]+([A-Za-z0-9\-]+)'
+REQUEST_ID_REGEX = r'Request ID[:\s]+([a-f0-9\-]{36})'
+PROSTATUS_REGEX = r'ProStatus[=:\s]+([A-Za-z0-9_]+)'
 
 
 # =========================
@@ -35,7 +35,7 @@ def extract_prostatus(text):
     return m.group(1) if m else None
 
 def get_carrier(deviceid):
-    if deviceid.startswith(("A", "Z")):
+    if str(deviceid).startswith(("A", "Z")):
         return "AIS"
     elif deviceid == "" or pd.isna(deviceid):
         return "-"
@@ -44,9 +44,10 @@ def get_carrier(deviceid):
 
 
 # =========================
-# CORE PARSER (ใช้ร่วมกัน)
+# CORE PARSER
 # =========================
 def process_file(df):
+
     log_map = {}
     ordered_rows = []
 
@@ -95,10 +96,20 @@ def process_file(df):
 
                 log_map[corr_id]["deviceids"] = []
 
+    # =========================
+    # FIX 🔥 กัน empty + กัน KeyError
+    # =========================
+    if not ordered_rows:
+        return pd.DataFrame(columns=["No.", "DeviceID", "RequestID", "ProStatus", "Carrier"])
+
     result_df = pd.DataFrame(ordered_rows)
 
     # ลบซ้ำ
     result_df = result_df.drop_duplicates()
+
+    # กัน column หาย
+    if "DeviceID" not in result_df.columns:
+        result_df["DeviceID"] = ""
 
     # carrier
     result_df["Carrier"] = result_df["DeviceID"].apply(get_carrier)
@@ -137,7 +148,12 @@ if file1 and file2:
 
     st.success("✅ Upload สำเร็จ")
 
-    # Process ทั้ง 2 ไฟล์
+    # Debug (ช่วยดูว่ามีข้อมูลจริงไหม)
+    with st.expander("🔍 Debug Preview"):
+        st.write("File1 sample", df_raw1.head())
+        st.write("File2 sample", df_raw2.head())
+
+    # Process
     result_df1 = process_file(df_raw1)
     result_df2 = process_file(df_raw2)
 
@@ -151,7 +167,7 @@ if file1 and file2:
     st.dataframe(result_df2, use_container_width=True)
 
     # =========================
-    # Export Excel (2 Sheet)
+    # Export
     # =========================
     output = BytesIO()
 
