@@ -17,7 +17,7 @@ PAIR_REGEX = r'"LDCMID":"([A-Za-z0-9\-]+)".*?"StatusReg":"([^"]+)".*?"ResDate":"
 
 TCAP_REGEX = r'"deviceId":"([^"]+)".*?"IMEI":"([^"]+)".*?"ICCID":"([^"]+)".*?"IMSI":"([^"]+)".*?"prodStatus":"([^"]+)".*?"prodDate":"([^"]+)".*?"sendDate":"([^"]+)".*?"typeStatus":"([^"]+)"'
 
-# 🔥 FIX: ProvisioningRequester regex ครบ block
+# 🔥 รองรับ multi-line JSON
 AIS_REGEX = r'resourceOrderId":\s*"([^"]+)".*?resourceGroupId":\s*"([^"]+)".*?resourceOrderTimeOut":\s*"([^"]+)".*?resultCode":\s*"([^"]+)".*?resultDesc":\s*"([^"]+)".*?developerMessage":\s*"([^"]*)"'
 
 # =========================
@@ -37,8 +37,9 @@ def extract_pairs(text):
 def extract_tcap(text):
     return re.findall(TCAP_REGEX, text)
 
+# 🔥 FIX: ใส่ DOTALL
 def extract_ais(text):
-    return re.findall(AIS_REGEX, text)
+    return re.findall(AIS_REGEX, text, re.DOTALL)
 
 def get_carrier(deviceid):
     if deviceid.startswith(("A", "Z")):
