@@ -76,8 +76,8 @@ if uploaded_file:
             if data["pairs"] and data["request_id"]:
                 for d, status in data["pairs"]:
                     ordered_rows.append({
-                        "deviceid": d,
-                        "request_id": data["request_id"],
+                        "DeviceID": d,
+                        "RequestID": data["request_id"],
                         "Result": status if status else "-"
                     })
 
