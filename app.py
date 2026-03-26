@@ -8,6 +8,37 @@ st.set_page_config(page_title="ITOSE - DTEN", layout="wide")
 st.title("ITOSE Tools - DTEN Summary")
 
 # =========================
+# CSS (CARD UI)
+# =========================
+st.markdown("""
+<style>
+.card {
+    padding: 20px;
+    border-radius: 12px;
+    background-color: #111827;
+    border: 1px solid #374151;
+    text-align: center;
+}
+.card-title {
+    font-size: 14px;
+    color: #9ca3af;
+}
+.card-value {
+    font-size: 40px;
+    font-weight: bold;
+    color: white;
+}
+.card-error {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    background-color: #3f1d1d;
+    color: #f87171;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# =========================
 # REGEX
 # =========================
 DATETIME_ID_REGEX = r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ([a-f0-9\-]{36})'
@@ -45,9 +76,6 @@ def get_carrier(deviceid):
         return "AIS"
     return "TRUE"
 
-def percent(err, total):
-    return f"{(err/total*100):.2f}%" if total else "0%"
-
 
 # =========================
 # HIGHLIGHT FUNCTIONS
@@ -71,13 +99,13 @@ def highlight_error_res(row):
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    dten_file = st.file_uploader("📥 DTEN", type=["xlsx", "csv"])
+    dten_file = st.file_uploader("DTEN", type=["xlsx", "csv"])
 with col2:
-    tcap_file = st.file_uploader("📥 TCAP", type=["xlsx", "csv"])
+    tcap_file = st.file_uploader("TCAP", type=["xlsx", "csv"])
 with col3:
-    req_file = st.file_uploader("📥 ProvisioningRequester", type=["xlsx", "csv"])
+    req_file = st.file_uploader("ProvisioningRequester", type=["xlsx", "csv"])
 with col4:
-    res_file = st.file_uploader("📥 ProvisioningResponder", type=["xlsx", "csv"])
+    res_file = st.file_uploader("ProvisioningResponder", type=["xlsx", "csv"])
 
 
 if dten_file and tcap_file and req_file and res_file:
@@ -234,30 +262,38 @@ if dten_file and tcap_file and req_file and res_file:
     res_error = len(df4[df4["ResultCode"] != "20000"])
 
     # =========================
-    # SUMMARY (เด่น ๆ)
+    # SUMMARY (CARD)
     # =========================
     st.markdown("### Summary")
 
     col1, col2, col3, col4 = st.columns(4)
 
+    def card(title, total, error):
+        bg = "#3f1d1d" if error > 0 else "#0f2a1d"
+        return f"""
+        <div class="card">
+            <div class="card-title">{title}</div>
+            <div class="card-value">{total}</div>
+            <div class="card-error" style="background-color:{bg}">
+                Error: {error}
+            </div>
+        </div>
+        """
+
     with col1:
-        st.metric("DTEN", dten_total)
-        st.error(f"❌ Error: {dten_error}")
+        st.markdown(card("DTEN", dten_total, dten_error), unsafe_allow_html=True)
 
     with col2:
-        st.metric("DTEN", dten_total)
-        st.error(f"❌ Error: {tcap_error}")
+        st.markdown(card("DTENTCAP", tcap_total, tcap_error), unsafe_allow_html=True)
 
     with col3:
-        st.metric("DTEN", dten_total)
-        st.error(f"❌ Error: {req_error}")
+        st.markdown(card("REQ", req_total, req_error), unsafe_allow_html=True)
 
     with col4:
-        st.metric("DTEN", dten_total)
-        st.error(f"❌ Error: {res_error}")
+        st.markdown(card("RES", res_total, res_error), unsafe_allow_html=True)
 
     # =========================
-    # TABLE (highlight error)
+    # TABLE
     # =========================
     st.subheader("DTENLinkage")
     st.dataframe(df1.style.apply(highlight_error_dten, axis=1))
@@ -284,7 +320,7 @@ if dten_file and tcap_file and req_file and res_file:
     output.seek(0)
 
     st.download_button(
-        "📥 Download Excel",
+        "Download Excel",
         data=output,
         file_name="dten-summary.xlsx"
     )
