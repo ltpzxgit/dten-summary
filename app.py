@@ -13,12 +13,9 @@ st.title("ITOSE Tools - DTEN Linkage")
 DATETIME_ID_REGEX = r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ([a-f0-9\-]{36})'
 REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
 
-# DTEN block
 PAIR_REGEX = r'"LDCMID":"([A-Za-z0-9\-]+)".*?"StatusReg":"([^"]+)".*?"ResDate":"([^"]+)"'
 
-# TCAP block
 TCAP_REGEX = r'"deviceId":"([^"]+)".*?"IMEI":"([^"]+)".*?"ICCID":"([^"]+)".*?"IMSI":"([^"]+)".*?"prodStatus":"([^"]+)".*?"prodDate":"([^"]+)".*?"sendDate":"([^"]+)".*?"typeStatus":"([^"]+)"'
-
 
 # =========================
 # FUNCTIONS
@@ -45,54 +42,39 @@ def get_carrier(deviceid):
     else:
         return "TRUE"
 
-
 # =========================
-# UPLOAD
+# UPLOAD 2 FILES
 # =========================
-uploaded_file = st.file_uploader("📥 Upload Excel / CSV", type=["xlsx", "csv"])
+col1, col2 = st.columns(2)
 
-if uploaded_file:
-    if uploaded_file.name.endswith(".csv"):
-        df = pd.read_csv(uploaded_file)
-    else:
-        df = pd.read_excel(uploaded_file)
+with col1:
+    dten_file = st.file_uploader("📥 Upload DTEN Log", type=["xlsx", "csv"])
 
-    st.write("📊 Preview", df.head())
+with col2:
+    tcap_file = st.file_uploader("📥 Upload TCAP Log", type=["xlsx", "csv"])
+
+if dten_file and tcap_file:
 
     # =========================
-    # DTEN LOGIC
+    # READ FILES
+    # =========================
+    df_dten = pd.read_csv(dten_file) if dten_file.name.endswith(".csv") else pd.read_excel(dten_file)
+    df_tcap = pd.read_csv(tcap_file) if tcap_file.name.endswith(".csv") else pd.read_excel(tcap_file)
+
+    # =========================
+    # DTEN PROCESS
     # =========================
     log_map = {}
     ordered_rows = []
 
-    # =========================
-    # TCAP LOGIC
-    # =========================
-    tcap_rows = []
-
-    for col in df.columns:
-        for val in df[col]:
+    for col in df_dten.columns:
+        for val in df_dten[col]:
             if pd.isna(val):
                 continue
 
             text = str(val)
-
-            # ---------- TCAP ----------
-            tcap_data = extract_tcap(text)
-            for d, imei, iccid, imsi, prod, prod_date, send_date, type_status in tcap_data:
-                tcap_rows.append({
-                    "DeviceID": d,
-                    "IMEI": imei,
-                    "ICCID": iccid,
-                    "IMSI": imsi,
-                    "ProdStatus": prod,
-                    "ProdDate": prod_date,
-                    "SendDate": send_date,
-                    "TypeStatus": type_status
-                })
-
-            # ---------- DTEN ----------
             corr_id = extract_corr_id(text)
+
             if not corr_id:
                 continue
 
@@ -102,17 +84,14 @@ if uploaded_file:
                     "pairs": []
                 }
 
-            # request id
             req_id = extract_request_id(text)
             if req_id:
                 log_map[corr_id]["request_id"] = req_id
 
-            # device + result + datetime
             pairs = extract_pairs(text)
             if pairs:
                 log_map[corr_id]["pairs"].extend(pairs)
 
-            # push
             data = log_map[corr_id]
             if data["pairs"] and data["request_id"]:
                 for d, status, resdate in data["pairs"]:
@@ -125,13 +104,35 @@ if uploaded_file:
 
                 log_map[corr_id]["pairs"] = []
 
-    # =========================
-    # DATAFRAME
-    # =========================
     result_df = pd.DataFrame(ordered_rows).drop_duplicates()
     result_df["Carrier"] = result_df["DeviceID"].apply(get_carrier)
     result_df = result_df.reset_index(drop=True)
     result_df.insert(0, "No.", result_df.index + 1)
+
+    # =========================
+    # TCAP PROCESS
+    # =========================
+    tcap_rows = []
+
+    for col in df_tcap.columns:
+        for val in df_tcap[col]:
+            if pd.isna(val):
+                continue
+
+            text = str(val)
+            tcap_data = extract_tcap(text)
+
+            for d, imei, iccid, imsi, prod, prod_date, send_date, type_status in tcap_data:
+                tcap_rows.append({
+                    "DeviceID": d,
+                    "IMEI": imei,
+                    "ICCID": iccid,
+                    "IMSI": imsi,
+                    "ProdStatus": prod,
+                    "ProdDate": prod_date,
+                    "SendDate": send_date,
+                    "TypeStatus": type_status
+                })
 
     tcap_df = pd.DataFrame(tcap_rows).drop_duplicates()
     tcap_df = tcap_df.reset_index(drop=True)
@@ -146,8 +147,6 @@ if uploaded_file:
     st.subheader("📄 DTENTCAPLinkage")
     st.dataframe(tcap_df)
 
-    st.success(f"✅ DTEN: {len(result_df)} records | TCAP: {len(tcap_df)} records")
-
     # =========================
     # EXPORT
     # =========================
@@ -161,6 +160,6 @@ if uploaded_file:
     st.download_button(
         label="📥 Download Excel",
         data=output,
-        file_name="dten-full-report.xlsx",
+        file_name="dten-tcap-report.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
