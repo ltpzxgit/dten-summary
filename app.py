@@ -10,7 +10,7 @@ st.title("ITOSE Tools - DTEN Linkage")
 # Regex
 REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
 PROSTATUS_REGEX = r'ProStatus=([A-Za-z0-9_]+)'
-PAIR_REGEX = r'"LDCMID":"([A-Za-z0-9\-]+)".*?"StatusReg":"([^"]+)"'  # 🔥 ตัวหลัก
+PAIR_REGEX = r'"LDCMID":"([A-Za-z0-9\-]+)".*?"StatusReg":"([^"]+)"'  # 🔥 block เดียว
 
 def extract_request_id(text):
     m = re.search(REQUEST_ID_REGEX, text)
@@ -43,6 +43,7 @@ if uploaded_file:
 
     ordered_rows = []
 
+    # 🔥 context แบบเดิม
     current_request_id = None
     current_prostatus = None
 
@@ -53,30 +54,36 @@ if uploaded_file:
 
             text = str(val)
 
-            # update context
+            # ✅ Request ID logic เดิม (ไหลตาม log)
             req_id = extract_request_id(text)
             if req_id:
                 current_request_id = req_id
 
+            # ProStatus
             ps = extract_prostatus(text)
             if ps:
                 current_prostatus = ps
 
-            # 🔥 extract block
+            # 🔥 extract block (device + result)
             pairs = extract_pairs(text)
 
             for d, status in pairs:
                 ordered_rows.append({
                     "deviceid": d,
-                    "request_id": current_request_id,
+                    "request_id": current_request_id,   # ✅ ใช้ logic เดิม
                     "ProStatus": current_prostatus,
                     "Result": status if status else "-"
                 })
 
-    result_df = pd.DataFrame(ordered_rows).drop_duplicates()
+    result_df = pd.DataFrame(ordered_rows)
 
+    # กันซ้ำ
+    result_df = result_df.drop_duplicates()
+
+    # Carrier
     result_df["Carrier"] = result_df["deviceid"].apply(get_carrier)
 
+    # No.
     result_df = result_df.reset_index(drop=True)
     result_df.insert(0, "No.", result_df.index + 1)
 
@@ -84,6 +91,7 @@ if uploaded_file:
 
     st.dataframe(result_df)
 
+    # Download
     output = BytesIO()
     result_df.to_excel(output, index=False, engine='openpyxl')
     output.seek(0)
