@@ -9,7 +9,7 @@ st.title("ITOSE Tools - DTEN Linkage")
 
 # Regex
 DATETIME_ID_REGEX = r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ([a-f0-9\-]{36})'
-LDCMID_REGEX = r'LDCMID=([A-Za-z0-9\-]+)'
+LDCMID_REGEX = r'LDCMID[=:]"?([A-Za-z0-9\-]+)'
 REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
 PROSTATUS_REGEX = r'ProStatus=([A-Za-z0-9_]+)'
 STATUSREG_REGEX = r'StatusReg[=:]"?([^",}]+)'  # 🔥 รองรับทั้ง = และ JSON
