@@ -14,7 +14,7 @@ DATETIME_ID_REGEX = r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ([a-f0-9\-]{36})'
 LDCMID_REGEX = r'(?:LDCMID|deviceId)[=:"\s]+([A-Za-z0-9\-]+)'
 REQUEST_ID_REGEX = r'Request ID[:\s]+([a-f0-9\-]{36})'
 PROSTATUS_REGEX = r'ProStatus[=:\s]+([A-Za-z0-9_]+)'
-PROD_REGEX = r'(?:Prod|PROD|product|prodName)[=:\s]+([A-Za-z0-9_\-]+)'
+
 
 # =========================
 # Extract Functions
@@ -34,10 +34,6 @@ def extract_prostatus(text):
     m = re.search(PROSTATUS_REGEX, text)
     return m.group(1) if m else None
 
-def extract_prod(text):
-    m = re.search(PROD_REGEX, text)
-    return m.group(1) if m else None
-
 def get_carrier(deviceid):
     if str(deviceid).startswith(("A", "Z")):
         return "AIS"
@@ -45,6 +41,7 @@ def get_carrier(deviceid):
         return "-"
     else:
         return "TRUE"
+
 
 # =========================
 # CORE PARSER
@@ -69,8 +66,7 @@ def process_file(df):
                 log_map[corr_id] = {
                     "deviceids": [],
                     "request_id": None,
-                    "prostatus": None,
-                    "prod": None
+                    "prostatus": None
                 }
 
             # device
@@ -88,11 +84,6 @@ def process_file(df):
             if ps:
                 log_map[corr_id]["prostatus"] = ps
 
-            # prod
-            prod = extract_prod(text)
-            if prod:
-                log_map[corr_id]["prod"] = prod
-
             # push เมื่อครบ
             data = log_map[corr_id]
             if data["deviceids"] and data["request_id"]:
@@ -100,17 +91,16 @@ def process_file(df):
                     ordered_rows.append({
                         "DeviceID": d,
                         "RequestID": data["request_id"],
-                        "ProStatus": data["prostatus"],
-                        "Prod": data["prod"]
+                        "ProStatus": data["prostatus"]
                     })
 
                 log_map[corr_id]["deviceids"] = []
 
     # =========================
-    # กัน empty
+    # FIX 🔥 กัน empty + กัน KeyError
     # =========================
     if not ordered_rows:
-        return pd.DataFrame(columns=["No.", "DeviceID", "RequestID", "ProStatus", "Prod", "Carrier"])
+        return pd.DataFrame(columns=["No.", "DeviceID", "RequestID", "ProStatus", "Carrier"])
 
     result_df = pd.DataFrame(ordered_rows)
 
@@ -158,7 +148,7 @@ if file1 and file2:
 
     st.success("✅ Upload สำเร็จ")
 
-    # Debug (ดู input กันงง)
+    # Debug (ช่วยดูว่ามีข้อมูลจริงไหม)
     with st.expander("🔍 Debug Preview"):
         st.write("File1 sample", df_raw1.head())
         st.write("File2 sample", df_raw2.head())
@@ -177,7 +167,7 @@ if file1 and file2:
     st.dataframe(result_df2, use_container_width=True)
 
     # =========================
-    # Export Excel
+    # Export
     # =========================
     output = BytesIO()
 
