@@ -203,7 +203,7 @@ if dten_file and tcap_file and req_file and res_file:
     st.subheader("ProvisioningResponder")
     st.dataframe(df4)
 
-    st.success(f"DTEN:{len(df1)} | TCAP:{len(df2)} | Req:{len(df3)} | Res:{len(df4)}")
+    st.success(f"DTEN:{len(df1)} | DTENTCAP:{len(df2)} | Req:{len(df3)} | Res:{len(df4)}")
 
     # =========================
     # EXPORT
