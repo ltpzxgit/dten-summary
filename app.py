@@ -10,7 +10,7 @@ st.title("ITOSE Tools - DTEN Linkage")
 # Regex
 DATETIME_ID_REGEX = r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ([a-f0-9\-]{36})'
 REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
-PAIR_REGEX = r'"LDCMID":"([A-Za-z0-9\-]+)".*?"StatusReg":"([^"]+)"'
+PAIR_REGEX = r'"LDCMID":"([A-Za-z0-9\-]+)".*?"StatusReg":"([^"]+)".*?"ResDate":"([^"]+)"'
 
 def extract_corr_id(text):
     m = re.search(DATETIME_ID_REGEX, text)
@@ -66,7 +66,7 @@ if uploaded_file:
             if req_id:
                 log_map[corr_id]["request_id"] = req_id
 
-            # device + result
+            # device + result + datetime
             pairs = extract_pairs(text)
             if pairs:
                 log_map[corr_id]["pairs"].extend(pairs)
@@ -74,18 +74,19 @@ if uploaded_file:
             # push
             data = log_map[corr_id]
             if data["pairs"] and data["request_id"]:
-                for d, status in data["pairs"]:
+                for d, status, resdate in data["pairs"]:
                     ordered_rows.append({
-                        "DeviceID": d,                         # 🔥 เปลี่ยนตรงนี้
+                        "DeviceID": d,
                         "Request ID": data["request_id"],
-                        "Result": status if status else "-"
+                        "Result": status if status else "-",
+                        "Date Time": resdate if resdate else "-"
                     })
 
                 log_map[corr_id]["pairs"] = []
 
     result_df = pd.DataFrame(ordered_rows).drop_duplicates()
 
-    result_df["Carrier"] = result_df["DeviceID"].apply(get_carrier)  # 🔥 เปลี่ยนตรงนี้ด้วย
+    result_df["Carrier"] = result_df["DeviceID"].apply(get_carrier)
 
     result_df = result_df.reset_index(drop=True)
     result_df.insert(0, "No.", result_df.index + 1)
@@ -94,7 +95,7 @@ if uploaded_file:
 
     st.dataframe(result_df)
 
-    # Export Excel
+    # Export
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         result_df.to_excel(writer, index=False, sheet_name='DTENLinkage')
