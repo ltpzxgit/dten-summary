@@ -5,15 +5,16 @@ from io import BytesIO
 
 st.set_page_config(page_title="ITOSE - DTEN", layout="wide")
 
-st.title("ITOSE Tools - DTEN Linkage (Dual Extract)")
+st.title("ITOSE Tools - DTEN Linkage (Block Parser)")
 
 # =========================
 # Regex
 # =========================
 DATETIME_ID_REGEX = r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ([a-f0-9\-]{36})'
-LDCMID_REGEX = r'(?:LDCMID|deviceId)[=:"\s]+([A-Za-z0-9\-]+)'
 REQUEST_ID_REGEX = r'Request ID[:\s]+([a-f0-9\-]{36})'
-PROSTATUS_REGEX = r'ProStatus[=:\s]+([A-Za-z0-9_]+)'
+
+LDCMID_BLOCK_REGEX = r'"LDCMID"\s*:\s*"([^"]+)"'
+STATUS_BLOCK_REGEX = r'"StatusReg"\s*:\s*"([^"]+)"'
 
 # =========================
 # Extract Functions
@@ -22,15 +23,16 @@ def extract_corr_id(text):
     m = re.search(DATETIME_ID_REGEX, text)
     return m.group(1) if m else None
 
-def extract_ldcmids(text):
-    return re.findall(LDCMID_REGEX, text)
-
 def extract_request_id(text):
     m = re.search(REQUEST_ID_REGEX, text)
     return m.group(1) if m else None
 
-def extract_prostatus(text):
-    m = re.search(PROSTATUS_REGEX, text)
+def extract_ldcmid(text):
+    m = re.search(LDCMID_BLOCK_REGEX, text)
+    return m.group(1) if m else None
+
+def extract_status(text):
+    m = re.search(STATUS_BLOCK_REGEX, text)
     return m.group(1) if m else None
 
 def get_carrier(deviceid):
@@ -55,47 +57,34 @@ def process_file(df):
                 continue
 
             text = str(val)
-            corr_id = extract_corr_id(text)
 
+            corr_id = extract_corr_id(text)
             if not corr_id:
                 continue
 
             if corr_id not in log_map:
                 log_map[corr_id] = {
-                    "deviceids": [],
-                    "request_id": None,
-                    "prostatus": None
+                    "request_id": None
                 }
-
-            # device
-            ldcmids = extract_ldcmids(text)
-            if ldcmids:
-                log_map[corr_id]["deviceids"].extend(ldcmids)
 
             # request id
             req_id = extract_request_id(text)
             if req_id:
                 log_map[corr_id]["request_id"] = req_id
 
-            # prostatus
-            ps = extract_prostatus(text)
-            if ps:
-                log_map[corr_id]["prostatus"] = ps
+            # block extract
+            ldcmid = extract_ldcmid(text)
+            status = extract_status(text)
 
-            # push
-            data = log_map[corr_id]
-            if data["deviceids"] and data["request_id"]:
-                for d in data["deviceids"]:
-                    ordered_rows.append({
-                        "DeviceID": str(d).strip(),
-                        "RequestID": str(data["request_id"]).strip(),
-                        "ProStatus": data["prostatus"]
-                    })
-
-                log_map[corr_id]["deviceids"] = []
+            if ldcmid:
+                ordered_rows.append({
+                    "DeviceID": ldcmid.strip(),
+                    "RequestID": log_map[corr_id]["request_id"],
+                    "DTENLinkage Result": status if status else "-"
+                })
 
     if not ordered_rows:
-        return pd.DataFrame(columns=["No.", "DeviceID", "RequestID", "ProStatus", "Carrier"])
+        return pd.DataFrame(columns=["No.", "DeviceID", "RequestID", "Carrier", "DTENLinkage Result"])
 
     result_df = pd.DataFrame(ordered_rows)
 
@@ -109,9 +98,17 @@ def process_file(df):
     # carrier
     result_df["Carrier"] = result_df["DeviceID"].apply(get_carrier)
 
+    # fill missing
+    result_df["DTENLinkage Result"] = result_df["DTENLinkage Result"].fillna("-")
+
     # No.
     result_df = result_df.reset_index(drop=True)
     result_df.insert(0, "No.", result_df.index + 1)
+
+    # reorder columns
+    result_df = result_df[[
+        "No.", "DeviceID", "RequestID", "Carrier", "DTENLinkage Result"
+    ]]
 
     return result_df
 
@@ -129,65 +126,35 @@ def load_file(file):
 # =========================
 # Upload
 # =========================
-file1 = st.file_uploader("📥 Upload File 1", type=["xlsx", "csv"])
-file2 = st.file_uploader("📥 Upload File 2", type=["xlsx", "csv"])
+file1 = st.file_uploader("📥 Upload File", type=["xlsx", "csv"])
 
 
 # =========================
 # Main
 # =========================
-if file1 and file2:
+if file1:
 
-    df_raw1 = load_file(file1)
-    df_raw2 = load_file(file2)
+    df_raw = load_file(file1)
 
     st.success("✅ Upload สำเร็จ")
 
     with st.expander("🔍 Debug Preview"):
-        st.write("File1 sample", df_raw1.head())
-        st.write("File2 sample", df_raw2.head())
+        st.write(df_raw.head())
 
-    # Process
-    result_df1 = process_file(df_raw1)
-    result_df2 = process_file(df_raw2)
+    result_df = process_file(df_raw)
 
-    # =========================
-    # Compare DeviceID
-    # =========================
-    deviceid_set_sheet2 = set(result_df2["DeviceID"].astype(str).str.strip())
+    st.subheader("📄 DTENLinkage Result")
+    st.dataframe(result_df, use_container_width=True)
 
-    result_df1["Sent to TCAP Cloud"] = result_df1["DeviceID"].astype(str).str.strip().apply(
-        lambda x: "Yes" if x in deviceid_set_sheet2 else "No"
-    )
-
-    # จัด column
-    result_df1 = result_df1[[
-        "No.", "DeviceID", "RequestID", "ProStatus", "Carrier", "Sent to TCAP Cloud"
-    ]]
-
-    # =========================
-    # Show
-    # =========================
-    st.subheader("📄 Sheet1 (DTENLinkage)")
-    st.dataframe(result_df1, use_container_width=True)
-
-    st.subheader("📄 Sheet2 (DTENTCAPLinkage)")
-    st.dataframe(result_df2[["No.", "DeviceID", "RequestID"]], use_container_width=True)
-
-    # =========================
     # Export
-    # =========================
     output = BytesIO()
 
-    result_df2_export = result_df2[["No.", "DeviceID", "RequestID"]].copy()
-
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        result_df1.to_excel(writer, sheet_name="DTENLinkage", index=False)
-        result_df2_export.to_excel(writer, sheet_name="DTENTCAPLinkage", index=False)
+        result_df.to_excel(writer, sheet_name="DTENLinkage", index=False)
 
     st.download_button(
-        label="📥 Download Excel (2 Sheets)",
+        label="📥 Download Excel",
         data=output.getvalue(),
-        file_name="dten_dual_extract.xlsx",
+        file_name="dten_block_extract.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
