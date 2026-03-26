@@ -339,7 +339,7 @@ if dten_file and tcap_file and req_file and res_file:
     output.seek(0)
 
     st.download_button(
-        "Download Excel",
+        "Download Summary",
         data=output,
         file_name="dten-summary.xlsx"
     )
