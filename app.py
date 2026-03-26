@@ -8,13 +8,12 @@ st.set_page_config(page_title="ITOSE - DTEN", layout="wide")
 st.title("ITOSE Tools - DTEN Linkage (Dual Extract)")
 
 # =========================
-# Regex (รองรับหลาย format)
+# Regex
 # =========================
 DATETIME_ID_REGEX = r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ([a-f0-9\-]{36})'
 LDCMID_REGEX = r'(?:LDCMID|deviceId)[=:"\s]+([A-Za-z0-9\-]+)'
 REQUEST_ID_REGEX = r'Request ID[:\s]+([a-f0-9\-]{36})'
 PROSTATUS_REGEX = r'ProStatus[=:\s]+([A-Za-z0-9_]+)'
-
 
 # =========================
 # Extract Functions
@@ -41,7 +40,6 @@ def get_carrier(deviceid):
         return "-"
     else:
         return "TRUE"
-
 
 # =========================
 # CORE PARSER
@@ -84,32 +82,30 @@ def process_file(df):
             if ps:
                 log_map[corr_id]["prostatus"] = ps
 
-            # push เมื่อครบ
+            # push
             data = log_map[corr_id]
             if data["deviceids"] and data["request_id"]:
                 for d in data["deviceids"]:
                     ordered_rows.append({
-                        "DeviceID": d,
-                        "RequestID": data["request_id"],
+                        "DeviceID": str(d).strip(),
+                        "RequestID": str(data["request_id"]).strip(),
                         "ProStatus": data["prostatus"]
                     })
 
                 log_map[corr_id]["deviceids"] = []
 
-    # =========================
-    # FIX 🔥 กัน empty + กัน KeyError
-    # =========================
+    # กัน empty
     if not ordered_rows:
         return pd.DataFrame(columns=["No.", "DeviceID", "RequestID", "ProStatus", "Carrier"])
 
     result_df = pd.DataFrame(ordered_rows)
 
-    # ลบซ้ำ
-    result_df = result_df.drop_duplicates()
+    # 🔥 clean ก่อน dedupe
+    result_df["DeviceID"] = result_df["DeviceID"].astype(str).str.strip()
+    result_df["RequestID"] = result_df["RequestID"].astype(str).str.strip()
 
-    # กัน column หาย
-    if "DeviceID" not in result_df.columns:
-        result_df["DeviceID"] = ""
+    # 🔥 กันเบิ้ลจริง (ใช้ key หลัก)
+    result_df = result_df.drop_duplicates(subset=["DeviceID", "RequestID"])
 
     # carrier
     result_df["Carrier"] = result_df["DeviceID"].apply(get_carrier)
@@ -148,7 +144,6 @@ if file1 and file2:
 
     st.success("✅ Upload สำเร็จ")
 
-    # Debug (ช่วยดูว่ามีข้อมูลจริงไหม)
     with st.expander("🔍 Debug Preview"):
         st.write("File1 sample", df_raw1.head())
         st.write("File2 sample", df_raw2.head())
@@ -160,20 +155,23 @@ if file1 and file2:
     # =========================
     # Show
     # =========================
-    st.subheader("📄 Sheet1 (File1 Result)")
+    st.subheader("📄 Sheet1 (DTENLinkage)")
     st.dataframe(result_df1, use_container_width=True)
 
-    st.subheader("📄 Sheet2 (File2 Result)")
-    st.dataframe(result_df2, use_container_width=True)
+    st.subheader("📄 Sheet2 (DTENTCAPLinkage)")
+    st.dataframe(result_df2[["No.", "DeviceID", "RequestID"]], use_container_width=True)
 
     # =========================
     # Export
     # =========================
     output = BytesIO()
 
+    # 👉 ตัด column Sheet2
+    result_df2_export = result_df2[["No.", "DeviceID", "RequestID"]].copy()
+
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        result_df1.to_excel(writer, sheet_name="File1", index=False)
-        result_df2.to_excel(writer, sheet_name="File2", index=False)
+        result_df1.to_excel(writer, sheet_name="DTENLinkage", index=False)
+        result_df2_export.to_excel(writer, sheet_name="DTENTCAPLinkage", index=False)
 
     st.download_button(
         label="📥 Download Excel (2 Sheets)",
