@@ -241,19 +241,19 @@ if dten_file and tcap_file and req_file and res_file:
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        st.metric("DTEN", dten_total, f"{percent(dten_error, dten_total)} Fail")
+        st.metric("DTEN", dten_total)
         st.error(f"❌ Error: {dten_error}")
 
     with col2:
-        st.metric("DTENTCAP", tcap_total, f"{percent(tcap_error, tcap_total)} Fail")
+        st.metric("DTEN", dten_total)
         st.error(f"❌ Error: {tcap_error}")
 
     with col3:
-        st.metric("REQ", req_total, f"{percent(req_error, req_total)} Fail")
+        st.metric("DTEN", dten_total)
         st.error(f"❌ Error: {req_error}")
 
     with col4:
-        st.metric("RES", res_total, f"{percent(res_error, res_total)} Fail")
+        st.metric("DTEN", dten_total)
         st.error(f"❌ Error: {res_error}")
 
     # =========================
