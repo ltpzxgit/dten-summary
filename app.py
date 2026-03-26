@@ -220,5 +220,5 @@ if dten_file and tcap_file and req_file and res_file:
     st.download_button(
         "📥 Download Excel",
         data=output,
-        file_name="full-linkage.xlsx"
+        file_name="dten-summary.xlsx"
     )
