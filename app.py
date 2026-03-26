@@ -5,7 +5,7 @@ from io import BytesIO
 
 st.set_page_config(page_title="ITOSE - DTEN", layout="wide")
 
-st.title("ITOSE Tools - DTEN Linkage (Compare Mode)")
+st.title("ITOSE Tools - DTEN Linkage (Dual Extract)")
 
 # =========================
 # Regex
@@ -44,7 +44,7 @@ def get_carrier(deviceid):
 
 
 # =========================
-# CORE PARSER (🔥 ใช้ร่วมกันทั้ง 2 ไฟล์)
+# CORE PARSER (ใช้ร่วมกัน)
 # =========================
 def process_file(df):
     log_map = {}
@@ -97,7 +97,7 @@ def process_file(df):
 
     result_df = pd.DataFrame(ordered_rows)
 
-    # clean + dedupe
+    # ลบซ้ำ
     result_df = result_df.drop_duplicates()
 
     # carrier
@@ -111,20 +111,20 @@ def process_file(df):
 
 
 # =========================
-# Upload
-# =========================
-file1 = st.file_uploader("📥 Upload File 1 (System Log)", type=["xlsx", "csv"])
-file2 = st.file_uploader("📥 Upload File 2 (TCAP Log)", type=["xlsx", "csv"])
-
-
-# =========================
-# Load Function
+# Load File
 # =========================
 def load_file(file):
     if file.name.endswith(".csv"):
         return pd.read_csv(file)
     else:
         return pd.read_excel(file)
+
+
+# =========================
+# Upload
+# =========================
+file1 = st.file_uploader("📥 Upload File 1", type=["xlsx", "csv"])
+file2 = st.file_uploader("📥 Upload File 2", type=["xlsx", "csv"])
 
 
 # =========================
@@ -137,56 +137,31 @@ if file1 and file2:
 
     st.success("✅ Upload สำเร็จ")
 
-    # =========================
-    # Process BOTH FILES
-    # =========================
+    # Process ทั้ง 2 ไฟล์
     result_df1 = process_file(df_raw1)
     result_df2 = process_file(df_raw2)
 
-    st.subheader("📄 File1 Result")
+    # =========================
+    # Show
+    # =========================
+    st.subheader("📄 Sheet1 (File1 Result)")
     st.dataframe(result_df1, use_container_width=True)
 
-    st.subheader("📄 File2 Result")
+    st.subheader("📄 Sheet2 (File2 Result)")
     st.dataframe(result_df2, use_container_width=True)
 
     # =========================
-    # Compare
+    # Export Excel (2 Sheet)
     # =========================
-    if st.button("🚀 Compare DeviceID"):
+    output = BytesIO()
 
-        df1 = result_df1.copy()
-        df2 = result_df2.copy()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        result_df1.to_excel(writer, sheet_name="File1", index=False)
+        result_df2.to_excel(writer, sheet_name="File2", index=False)
 
-        # Yes / No
-        df1["Sent to TCAP Cloud"] = df1["DeviceID"].isin(df2["DeviceID"]).map({
-            True: "Yes",
-            False: "No"
-        })
-
-        # mismatch
-        df_mismatch = df2[~df2["DeviceID"].isin(df1["DeviceID"])].copy()
-
-        # =========================
-        # Show
-        # =========================
-        st.subheader("✅ Sheet1 (Original + Status)")
-        st.dataframe(df1, use_container_width=True)
-
-        st.subheader("❌ Sheet2 (Not in System)")
-        st.dataframe(df_mismatch, use_container_width=True)
-
-        # =========================
-        # Export
-        # =========================
-        output = BytesIO()
-
-        with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            df1.to_excel(writer, sheet_name="Result", index=False)
-            df_mismatch.to_excel(writer, sheet_name="Mismatch", index=False)
-
-        st.download_button(
-            "📥 Download Excel",
-            data=output.getvalue(),
-            file_name="dten_compare.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+    st.download_button(
+        label="📥 Download Excel (2 Sheets)",
+        data=output.getvalue(),
+        file_name="dten_dual_extract.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
