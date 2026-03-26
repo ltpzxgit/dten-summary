@@ -44,7 +44,7 @@ def get_carrier(deviceid):
         return "TRUE"
 
 # =========================
-# CORE PARSER
+# CORE PARSER (FIX REQUEST FLOW)
 # =========================
 def process_file(df):
 
@@ -62,24 +62,30 @@ def process_file(df):
             if not corr_id:
                 continue
 
+            # init corr_id
             if corr_id not in log_map:
                 log_map[corr_id] = {
-                    "request_id": None
+                    "request_id": None,
+                    "last_request_id": None
                 }
 
-            # request id
+            # 🔥 update request id (จำค่าล่าสุด)
             req_id = extract_request_id(text)
             if req_id:
                 log_map[corr_id]["request_id"] = req_id
+                log_map[corr_id]["last_request_id"] = req_id
 
-            # block extract
+            # 🔥 fallback ใช้ค่าล่าสุด ถ้าไม่มีในบรรทัดนี้
+            current_request = log_map[corr_id]["request_id"] or log_map[corr_id]["last_request_id"]
+
+            # extract block
             ldcmid = extract_ldcmid(text)
             status = extract_status(text)
 
             if ldcmid:
                 ordered_rows.append({
                     "DeviceID": ldcmid.strip(),
-                    "RequestID": log_map[corr_id]["request_id"],
+                    "RequestID": current_request if current_request else "-",
                     "DTENLinkage Result": status if status else "-"
                 })
 
@@ -98,14 +104,14 @@ def process_file(df):
     # carrier
     result_df["Carrier"] = result_df["DeviceID"].apply(get_carrier)
 
-    # fill missing
+    # fill
     result_df["DTENLinkage Result"] = result_df["DTENLinkage Result"].fillna("-")
 
     # No.
     result_df = result_df.reset_index(drop=True)
     result_df.insert(0, "No.", result_df.index + 1)
 
-    # reorder columns
+    # columns
     result_df = result_df[[
         "No.", "DeviceID", "RequestID", "Carrier", "DTENLinkage Result"
     ]]
