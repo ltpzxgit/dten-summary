@@ -45,9 +45,6 @@ def get_carrier(deviceid):
         return "AIS"
     return "TRUE"
 
-def percent(err, total):
-    return f"{(err/total*100):.2f}%" if total else "0%"
-
 
 # =========================
 # HIGHLIGHT FUNCTIONS
@@ -71,13 +68,13 @@ def highlight_error_res(row):
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    dten_file = st.file_uploader("📥 DTEN", type=["xlsx", "csv"])
+    dten_file = st.file_uploader("DTEN", type=["xlsx", "csv"])
 with col2:
-    tcap_file = st.file_uploader("📥 TCAP", type=["xlsx", "csv"])
+    tcap_file = st.file_uploader("TCAP", type=["xlsx", "csv"])
 with col3:
-    req_file = st.file_uploader("📥 ProvisioningRequester", type=["xlsx", "csv"])
+    req_file = st.file_uploader("ProvisioningRequester", type=["xlsx", "csv"])
 with col4:
-    res_file = st.file_uploader("📥 ProvisioningResponder", type=["xlsx", "csv"])
+    res_file = st.file_uploader("ProvisioningResponder", type=["xlsx", "csv"])
 
 
 if dten_file and tcap_file and req_file and res_file:
@@ -234,30 +231,34 @@ if dten_file and tcap_file and req_file and res_file:
     res_error = len(df4[df4["ResultCode"] != "20000"])
 
     # =========================
-    # SUMMARY (เด่น ๆ)
+    # SUMMARY (clean)
     # =========================
-    st.markdown("### 📊 Summary")
+    st.markdown("### Summary")
 
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        st.metric("DTEN", dten_total, f"{percent(dten_error, dten_total)} Fail")
-        st.error(f"❌ Error: {dten_error}")
+        st.write("DTEN")
+        st.write(dten_total)
+        st.error(f"Error: {dten_error}")
 
     with col2:
-        st.metric("DTENTCAP", tcap_total, f"{percent(tcap_error, tcap_total)} Fail")
-        st.error(f"❌ Error: {tcap_error}")
+        st.write("DTENTCAP")
+        st.write(tcap_total)
+        st.error(f"Error: {tcap_error}")
 
     with col3:
-        st.metric("REQ", req_total, f"{percent(req_error, req_total)} Fail")
-        st.error(f"❌ Error: {req_error}")
+        st.write("REQ")
+        st.write(req_total)
+        st.error(f"Error: {req_error}")
 
     with col4:
-        st.metric("RES", res_total, f"{percent(res_error, res_total)} Fail")
-        st.error(f"❌ Error: {res_error}")
+        st.write("RES")
+        st.write(res_total)
+        st.error(f"Error: {res_error}")
 
     # =========================
-    # TABLE (highlight error)
+    # TABLE
     # =========================
     st.subheader("DTENLinkage")
     st.dataframe(df1.style.apply(highlight_error_dten, axis=1))
@@ -284,7 +285,7 @@ if dten_file and tcap_file and req_file and res_file:
     output.seek(0)
 
     st.download_button(
-        "📥 Download Excel",
+        "Download Excel",
         data=output,
         file_name="dten-summary.xlsx"
     )
