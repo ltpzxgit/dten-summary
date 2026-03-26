@@ -3,126 +3,122 @@ import pandas as pd
 import re
 from io import BytesIO
 
-st.set_page_config(page_title="DeviceID Compare Tool", layout="wide")
+st.set_page_config(page_title="ITOSE - DTEN", layout="wide")
 
-st.title("🔍 DeviceID Compare Tool (Advanced)")
+st.title("ITOSE Tools - DTEN Linkage")
 
-# =========================
-# Upload
-# =========================
-file1 = st.file_uploader("📥 Upload Log / File 1 (System)", type=["txt", "csv", "xlsx"])
-file2 = st.file_uploader("📥 Upload File 2 (TCAP Cloud)", type=["xlsx", "csv"])
+# Regex
+DATETIME_ID_REGEX = r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ([a-f0-9\-]{36})'
+LDCMID_REGEX = r'LDCMID=([A-Za-z0-9\-]+)'
+REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
+PROSTATUS_REGEX = r'ProStatus=([A-Za-z0-9_]+)'
 
+def extract_corr_id(text):
+    m = re.search(DATETIME_ID_REGEX, text)
+    return m.group(1) if m else None
 
-# =========================
-# Regex Extract DeviceID
-# =========================
-DEVICE_REGEX = r'"deviceId"\s*:\s*"([^"]+)"'
+def extract_ldcmids(text):
+    return re.findall(LDCMID_REGEX, text)
 
+def extract_request_id(text):
+    m = re.search(REQUEST_ID_REGEX, text)
+    return m.group(1) if m else None
 
-def extract_device_from_text(file):
-    text = file.read().decode("utf-8", errors="ignore")
-    matches = re.findall(DEVICE_REGEX, text)
+def extract_prostatus(text):
+    m = re.search(PROSTATUS_REGEX, text)
+    return m.group(1) if m else None
 
-    df = pd.DataFrame(matches, columns=["DeviceID"])
-    return df
-
-
-def load_file(file):
-    if file.name.endswith(".csv"):
-        return pd.read_csv(file)
+def get_carrier(deviceid):
+    if deviceid.startswith(("A", "Z")):
+        return "AIS"
+    elif deviceid == "" or pd.isna(deviceid):
+        return "-"
     else:
-        return pd.read_excel(file)
+        return "TRUE"
 
+uploaded_file = st.file_uploader("📥 Upload Excel / CSV", type=["xlsx", "csv"])
 
-def clean(series):
-    return series.astype(str).str.strip()
-
-
-# =========================
-# Main
-# =========================
-if file1 and file2:
-
-    # =========================
-    # STEP 1: Extract DeviceID จาก File1
-    # =========================
-    if file1.name.endswith(".txt"):
-        df1 = extract_device_from_text(file1)
-
+if uploaded_file:
+    if uploaded_file.name.endswith(".csv"):
+        df = pd.read_csv(uploaded_file)
     else:
-        df1 = load_file(file1)
-        df1.columns = df1.columns.str.strip()
+        df = pd.read_excel(uploaded_file)
 
-        # ให้ user เลือก column ถ้าไม่ใช่ log
-        device_col1 = st.selectbox("เลือก DeviceID column (File1)", df1.columns)
-        df1 = df1[[device_col1]].rename(columns={device_col1: "DeviceID"})
+    st.write("📊 Preview", df.head())
 
-    # remove duplicate
-    df1["DeviceID"] = clean(df1["DeviceID"])
-    df1 = df1.drop_duplicates().reset_index(drop=True)
+    log_map = {}
+    ordered_rows = []
 
-    # =========================
-    # STEP 2: Load File2
-    # =========================
-    df2 = load_file(file2)
-    df2.columns = df2.columns.str.strip()
+    # 🔥 อ่านตามลำดับจริง
+    for col in df.columns:
+        for val in df[col]:
+            if pd.isna(val):
+                continue
 
-    device_col2 = st.selectbox("เลือก DeviceID column (File2)", df2.columns)
-    df2["DeviceID"] = clean(df2[device_col2])
+            text = str(val)
+            corr_id = extract_corr_id(text)
 
-    df2 = df2[["DeviceID"]].drop_duplicates()
+            if not corr_id:
+                continue
 
-    st.success("✅ Extract + Load สำเร็จ")
+            if corr_id not in log_map:
+                log_map[corr_id] = {
+                    "deviceids": [],
+                    "request_id": None,
+                    "prostatus": None
+                }
 
-    # =========================
-    # STEP 3: Compare
-    # =========================
-    if st.button("🚀 Start Compare"):
+            # device
+            ldcmids = extract_ldcmids(text)
+            if ldcmids:
+                log_map[corr_id]["deviceids"].extend(ldcmids)
 
-        # Sheet1 (เหมือนต้นแบบ + เพิ่ม column)
-        df_result = df1.copy()
+            # request id
+            req_id = extract_request_id(text)
+            if req_id:
+                log_map[corr_id]["request_id"] = req_id
 
-        df_result["Sent to TCAP Cloud"] = df_result["DeviceID"].isin(df2["DeviceID"]).map({
-            True: "Yes",
-            False: "No"
-        })
+            # prostatus
+            ps = extract_prostatus(text)
+            if ps:
+                log_map[corr_id]["prostatus"] = ps
 
-        # Sheet2 mismatch
-        df_mismatch = df2[~df2["DeviceID"].isin(df1["DeviceID"])].copy()
+            # 🔥 ถ้าครบแล้ว → push ทันที (รักษาลำดับ)
+            data = log_map[corr_id]
+            if data["deviceids"] and data["request_id"]:
+                for d in data["deviceids"]:
+                    ordered_rows.append({
+                        "deviceid": d,
+                        "request_id": data["request_id"],
+                        "ProStatus": data["prostatus"]
+                    })
+                # กันซ้ำ
+                log_map[corr_id]["deviceids"] = []
 
-        # =========================
-        # Metrics
-        # =========================
-        col1, col2, col3 = st.columns(3)
+    result_df = pd.DataFrame(ordered_rows)
 
-        col1.metric("Total DeviceID (File1)", len(df_result))
-        col2.metric("Matched", (df_result["Sent to TCAP Cloud"] == "Yes").sum())
-        col3.metric("Not Match (File2)", len(df_mismatch))
+    # ลบซ้ำ (แต่ยังรักษา order)
+    result_df = result_df.drop_duplicates()
 
-        st.divider()
+    # Carrier
+    result_df["Carrier"] = result_df["deviceid"].apply(get_carrier)
 
-        # =========================
-        # Display
-        # =========================
-        st.subheader("📄 Sheet1 (Original Format + Status)")
-        st.dataframe(df_result, use_container_width=True)
+    # No.
+    result_df = result_df.reset_index(drop=True)
+    result_df.insert(0, "No.", result_df.index + 1)
 
-        st.subheader("❌ Sheet2 (Not in System)")
-        st.dataframe(df_mismatch, use_container_width=True)
+    st.success(f"✅ Extracted {len(result_df)} records")
 
-        # =========================
-        # Export
-        # =========================
-        output = BytesIO()
+    st.dataframe(result_df)
 
-        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-            df_result.to_excel(writer, sheet_name="Result", index=False)
-            df_mismatch.to_excel(writer, sheet_name="Mismatch", index=False)
+    # Download
+    output = BytesIO()
+    result_df.to_excel(output, index=False, engine='openpyxl')
+    output.seek(0)
 
-        st.download_button(
-            "📥 Download Excel",
-            data=output.getvalue(),
-            file_name="device_compare.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+    st.download_button(
+        label="📥 Download Excel",
+        data=output,
+        file_name="dten-summary.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
