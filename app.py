@@ -10,7 +10,6 @@ st.title("ITOSE Tools - DTEN Linkage")
 # Regex
 DATETIME_ID_REGEX = r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ([a-f0-9\-]{36})'
 REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
-PROSTATUS_REGEX = r'ProStatus=([A-Za-z0-9_]+)'
 PAIR_REGEX = r'"LDCMID":"([A-Za-z0-9\-]+)".*?"StatusReg":"([^"]+)"'
 
 def extract_corr_id(text):
@@ -19,10 +18,6 @@ def extract_corr_id(text):
 
 def extract_request_id(text):
     m = re.search(REQUEST_ID_REGEX, text)
-    return m.group(1) if m else None
-
-def extract_prostatus(text):
-    m = re.search(PROSTATUS_REGEX, text)
     return m.group(1) if m else None
 
 def extract_pairs(text):
@@ -63,38 +58,29 @@ if uploaded_file:
             if corr_id not in log_map:
                 log_map[corr_id] = {
                     "request_id": None,
-                    "prostatus": None,
                     "pairs": []
                 }
 
-            # เก็บ request id
+            # request id
             req_id = extract_request_id(text)
             if req_id:
                 log_map[corr_id]["request_id"] = req_id
 
-            # เก็บ prostatus
-            ps = extract_prostatus(text)
-            if ps:
-                log_map[corr_id]["prostatus"] = ps
-
-            # เก็บ device + result (block เดียว)
+            # device + result
             pairs = extract_pairs(text)
             if pairs:
                 log_map[corr_id]["pairs"].extend(pairs)
 
-            # 🔥 ถ้ามีครบ → ยิงออก
+            # push
             data = log_map[corr_id]
-
             if data["pairs"] and data["request_id"]:
                 for d, status in data["pairs"]:
                     ordered_rows.append({
                         "deviceid": d,
                         "request_id": data["request_id"],
-                        "ProStatus": data["prostatus"],
                         "Result": status if status else "-"
                     })
 
-                # กันซ้ำ
                 log_map[corr_id]["pairs"] = []
 
     result_df = pd.DataFrame(ordered_rows).drop_duplicates()
