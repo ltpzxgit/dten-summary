@@ -5,7 +5,7 @@ from io import BytesIO
 
 st.set_page_config(page_title="ITOSE - DTEN", layout="wide")
 
-st.title("ITOSE Tools - DTEN Linkage")
+st.title("ITOSE Tools - DTEN + TCAP + AIS")
 
 # =========================
 # REGEX
@@ -16,6 +16,9 @@ REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
 PAIR_REGEX = r'"LDCMID":"([A-Za-z0-9\-]+)".*?"StatusReg":"([^"]+)".*?"ResDate":"([^"]+)"'
 
 TCAP_REGEX = r'"deviceId":"([^"]+)".*?"IMEI":"([^"]+)".*?"ICCID":"([^"]+)".*?"IMSI":"([^"]+)".*?"prodStatus":"([^"]+)".*?"prodDate":"([^"]+)".*?"sendDate":"([^"]+)".*?"typeStatus":"([^"]+)"'
+
+AIS_REGEX = r'resourceGroupId":\s*"([^"]+)".*?resultDesc":\s*"([^"]+)"'
+
 
 # =========================
 # FUNCTIONS
@@ -34,6 +37,9 @@ def extract_pairs(text):
 def extract_tcap(text):
     return re.findall(TCAP_REGEX, text)
 
+def extract_ais(text):
+    return re.findall(AIS_REGEX, text)
+
 def get_carrier(deviceid):
     if deviceid.startswith(("A", "Z")):
         return "AIS"
@@ -43,26 +49,27 @@ def get_carrier(deviceid):
         return "TRUE"
 
 # =========================
-# UPLOAD 2 FILES
+# UPLOAD 3 FILES
 # =========================
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
 
 with col1:
-    dten_file = st.file_uploader("📥 Upload DTEN Log", type=["xlsx", "csv"])
+    dten_file = st.file_uploader("📥 DTEN Log", type=["xlsx", "csv"])
 
 with col2:
-    tcap_file = st.file_uploader("📥 Upload TCAP Log", type=["xlsx", "csv"])
+    tcap_file = st.file_uploader("📥 TCAP Log", type=["xlsx", "csv"])
 
-if dten_file and tcap_file:
+with col3:
+    ais_file = st.file_uploader("📥 AIS Log", type=["xlsx", "csv"])
 
-    # =========================
-    # READ FILES
-    # =========================
+if dten_file and tcap_file and ais_file:
+
     df_dten = pd.read_csv(dten_file) if dten_file.name.endswith(".csv") else pd.read_excel(dten_file)
     df_tcap = pd.read_csv(tcap_file) if tcap_file.name.endswith(".csv") else pd.read_excel(tcap_file)
+    df_ais = pd.read_csv(ais_file) if ais_file.name.endswith(".csv") else pd.read_excel(ais_file)
 
     # =========================
-    # DTEN PROCESS
+    # DTEN (uuid mapping)
     # =========================
     log_map = {}
     ordered_rows = []
@@ -98,19 +105,17 @@ if dten_file and tcap_file:
                     ordered_rows.append({
                         "DeviceID": d,
                         "Request ID": data["request_id"],
-                        "Result": status if status else "-",
-                        "Date Time": resdate if resdate else "-"
+                        "Result": status,
+                        "Date Time": resdate
                     })
 
                 log_map[corr_id]["pairs"] = []
 
     result_df = pd.DataFrame(ordered_rows).drop_duplicates()
     result_df["Carrier"] = result_df["DeviceID"].apply(get_carrier)
-    result_df = result_df.reset_index(drop=True)
-    result_df.insert(0, "No.", result_df.index + 1)
 
     # =========================
-    # TCAP PROCESS
+    # TCAP
     # =========================
     tcap_rows = []
 
@@ -119,10 +124,7 @@ if dten_file and tcap_file:
             if pd.isna(val):
                 continue
 
-            text = str(val)
-            tcap_data = extract_tcap(text)
-
-            for d, imei, iccid, imsi, prod, prod_date, send_date, type_status in tcap_data:
+            for d, imei, iccid, imsi, prod, prod_date, send_date, type_status in extract_tcap(str(val)):
                 tcap_rows.append({
                     "DeviceID": d,
                     "IMEI": imei,
@@ -135,17 +137,43 @@ if dten_file and tcap_file:
                 })
 
     tcap_df = pd.DataFrame(tcap_rows).drop_duplicates()
-    tcap_df = tcap_df.reset_index(drop=True)
-    tcap_df.insert(0, "No.", tcap_df.index + 1)
+
+    # =========================
+    # AIS (uuid mapping)
+    # =========================
+    ais_rows = []
+
+    for col in df_ais.columns:
+        for val in df_ais[col]:
+            if pd.isna(val):
+                continue
+
+            text = str(val)
+            corr_id = extract_corr_id(text)
+
+            if not corr_id:
+                continue
+
+            for d, result in extract_ais(text):
+                ais_rows.append({
+                    "DeviceID": d,
+                    "UUID": corr_id,
+                    "AIS Result": result
+                })
+
+    ais_df = pd.DataFrame(ais_rows).drop_duplicates()
 
     # =========================
     # DISPLAY
     # =========================
-    st.subheader("📄 DTENLinkage")
+    st.subheader("DTENLinkage")
     st.dataframe(result_df)
 
-    st.subheader("📄 DTENTCAPLinkage")
+    st.subheader("DTENTCAPLinkage")
     st.dataframe(tcap_df)
+
+    st.subheader("AISLinkage")
+    st.dataframe(ais_df)
 
     # =========================
     # EXPORT
@@ -154,12 +182,12 @@ if dten_file and tcap_file:
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         result_df.to_excel(writer, index=False, sheet_name='DTENLinkage')
         tcap_df.to_excel(writer, index=False, sheet_name='DTENTCAPLinkage')
+        ais_df.to_excel(writer, index=False, sheet_name='AISLinkage')
 
     output.seek(0)
 
     st.download_button(
-        label="📥 Download Excel",
+        "📥 Download Excel",
         data=output,
-        file_name="dten-tcap-report.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        file_name="full-linkage.xlsx"
     )
