@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import re
+import json
 from io import BytesIO
 
 st.set_page_config(page_title="ITOSE - DTEN", layout="wide")
@@ -17,8 +18,6 @@ PAIR_REGEX = r'"LDCMID":"([A-Za-z0-9\-]+)".*?"StatusReg":"([^"]+)".*?"ResDate":"
 TCAP_REGEX = r'"deviceId":"([^"]+)".*?"IMEI":"([^"]+)".*?"ICCID":"([^"]+)".*?"IMSI":"([^"]+)".*?"prodStatus":"([^"]+)".*?"prodDate":"([^"]+)".*?"sendDate":"([^"]+)".*?"typeStatus":"([^"]+)"'
 
 AIS_REGEX = r'resourceOrderId":\s*"([^"]+)".*?resourceGroupId":\s*"([^"]+)".*?resourceOrderTimeOut":\s*"([^"]+)".*?resultCode":\s*"([^"]+)".*?resultDesc":\s*"([^"]+)".*?developerMessage":\s*"([^"]*)"'
-
-RESPONDER_REGEX = r'resourceOrderId":"([^"]+)".*?resourceGroupId":"([^"]+)".*?resultCode":"([^"]+)".*?resultDesc":"([^"]+)".*?developerMessage":"([^"]*)"'
 
 # =========================
 # FUNCTIONS
@@ -39,9 +38,6 @@ def extract_tcap(text):
 
 def extract_ais(text):
     return re.findall(AIS_REGEX, text, re.DOTALL)
-
-def extract_responder(text):
-    return re.findall(RESPONDER_REGEX, text)
 
 def get_carrier(deviceid):
     if isinstance(deviceid, str) and deviceid.startswith(("A", "Z")):
@@ -104,11 +100,7 @@ if dten_file and tcap_file and req_file and res_file:
                     })
                 log_map[cid]["pairs"] = []
 
-    df1 = pd.DataFrame(rows)
-
-    # 🔥 safe dedupe
-    df1 = df1.drop_duplicates(subset=["DeviceID", "Request ID", "Date Time"])
-
+    df1 = pd.DataFrame(rows).drop_duplicates(subset=["DeviceID","Request ID","Date Time"])
     df1["Carrier"] = df1["DeviceID"].apply(get_carrier)
     df1 = df1.reset_index(drop=True)
     df1.insert(0, "No.", df1.index + 1)
@@ -134,7 +126,7 @@ if dten_file and tcap_file and req_file and res_file:
                     "TypeStatus": ts
                 })
 
-    df2 = pd.DataFrame(trows).drop_duplicates(subset=["DeviceID", "IMEI"])
+    df2 = pd.DataFrame(trows).drop_duplicates(subset=["DeviceID","IMEI"])
     df2 = df2.reset_index(drop=True)
     df2.insert(0, "No.", df2.index + 1)
 
@@ -160,12 +152,12 @@ if dten_file and tcap_file and req_file and res_file:
                     "ResultDesc": desc
                 })
 
-    df3 = pd.DataFrame(rrows).drop_duplicates(subset=["DeviceID", "UUID"])
+    df3 = pd.DataFrame(rrows).drop_duplicates(subset=["DeviceID","UUID"])
     df3 = df3.reset_index(drop=True)
     df3.insert(0, "No.", df3.index + 1)
 
     # =========================
-    # ProvisioningResponder
+    # ProvisioningResponder (🔥 FIX JSON)
     # =========================
     srows = []
 
@@ -177,16 +169,22 @@ if dten_file and tcap_file and req_file and res_file:
             cid = extract_corr_id(text)
             if not cid: continue
 
-            for ro, d, code, desc, msg in extract_responder(text):
-                srows.append({
-                    "DeviceID": d,
-                    "UUID": cid,
-                    "ResourceOrderId": ro,
-                    "ResultCode": code,
-                    "ResultDesc": desc
-                })
+            try:
+                json_part = text.split("Response:")[-1].strip()
+                data = json.loads(json_part)
 
-    df4 = pd.DataFrame(srows).drop_duplicates(subset=["DeviceID", "UUID"])
+                srows.append({
+                    "DeviceID": data.get("resourceGroupId"),
+                    "UUID": cid,
+                    "ResourceOrderId": data.get("resourceOrderId"),
+                    "ResultCode": data.get("resultCode"),
+                    "ResultDesc": data.get("resultDesc"),
+                    "DeveloperMessage": data.get("developerMessage") or "-"
+                })
+            except:
+                continue
+
+    df4 = pd.DataFrame(srows).drop_duplicates(subset=["DeviceID","UUID"])
     df4 = df4.reset_index(drop=True)
     df4.insert(0, "No.", df4.index + 1)
 
