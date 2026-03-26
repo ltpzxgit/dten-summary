@@ -45,6 +45,25 @@ def get_carrier(deviceid):
         return "AIS"
     return "TRUE"
 
+def percent(err, total):
+    return f"{(err/total*100):.2f}%" if total else "0%"
+
+
+# =========================
+# HIGHLIGHT FUNCTIONS
+# =========================
+def highlight_error_dten(row):
+    return ['background-color: #ffcccc' if row["Result"] != "Process completed successfully" else '' for _ in row]
+
+def highlight_error_tcap(row):
+    return ['background-color: #ffcccc' if row["TypeStatus"] != "OK" else '' for _ in row]
+
+def highlight_error_req(row):
+    return ['background-color: #ffcccc' if row["ResultCode"] != "20000" else '' for _ in row]
+
+def highlight_error_res(row):
+    return ['background-color: #ffcccc' if row["ResultCode"] != "20000" else '' for _ in row]
+
 
 # =========================
 # UPLOAD
@@ -200,7 +219,7 @@ if dten_file and tcap_file and req_file and res_file:
     df4.insert(0, "No.", df4.index + 1)
 
     # =========================
-    # COUNT (เฉพาะ NOT SUCCESS = ERROR)
+    # COUNT
     # =========================
     dten_total = len(df1)
     dten_error = len(df1[df1["Result"] != "Process completed successfully"])
@@ -215,49 +234,42 @@ if dten_file and tcap_file and req_file and res_file:
     res_error = len(df4[df4["ResultCode"] != "20000"])
 
     # =========================
-    # DISPLAY TABLE
+    # SUMMARY (เด่น ๆ)
+    # =========================
+    st.markdown("### 📊 Summary")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric("DTEN", dten_total, f"{percent(dten_error, dten_total)} Fail")
+        st.error(f"❌ Error: {dten_error}")
+
+    with col2:
+        st.metric("DTENTCAP", tcap_total, f"{percent(tcap_error, tcap_total)} Fail")
+        st.error(f"❌ Error: {tcap_error}")
+
+    with col3:
+        st.metric("REQ", req_total, f"{percent(req_error, req_total)} Fail")
+        st.error(f"❌ Error: {req_error}")
+
+    with col4:
+        st.metric("RES", res_total, f"{percent(res_error, res_total)} Fail")
+        st.error(f"❌ Error: {res_error}")
+
+    # =========================
+    # TABLE (highlight error)
     # =========================
     st.subheader("DTENLinkage")
-    st.dataframe(df1)
+    st.dataframe(df1.style.apply(highlight_error_dten, axis=1))
 
     st.subheader("DTENTCAPLinkage")
-    st.dataframe(df2)
+    st.dataframe(df2.style.apply(highlight_error_tcap, axis=1))
 
     st.subheader("ProvisioningRequester")
-    st.dataframe(df3)
+    st.dataframe(df3.style.apply(highlight_error_req, axis=1))
 
     st.subheader("ProvisioningResponder")
-    st.dataframe(df4)
-
-    # =========================
-    # DISPLAY SUMMARY (แยก block)
-    # =========================
-    st.markdown("### 📊 Summary Result")
-
-    st.success(f"""
-DTEN:
-{dten_total}
-Error:
-{dten_error}
-
---------------
-DTENTCAP:
-{tcap_total}
-Error:
-{tcap_error}
-
---------------
-Req:
-{req_total}
-Error:
-{req_error}
-
---------------
-Res:
-{res_total}
-Error:
-{res_error}
-""")
+    st.dataframe(df4.style.apply(highlight_error_res, axis=1))
 
     # =========================
     # EXPORT
