@@ -8,9 +8,14 @@ st.set_page_config(page_title="ITOSE - DTEN", layout="wide")
 st.title("ITOSE Tools - DTEN Linkage")
 
 # Regex
+DATETIME_ID_REGEX = r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ([a-f0-9\-]{36})'
 REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
 PROSTATUS_REGEX = r'ProStatus=([A-Za-z0-9_]+)'
-PAIR_REGEX = r'"LDCMID":"([A-Za-z0-9\-]+)".*?"StatusReg":"([^"]+)"'  # 🔥 block เดียว
+PAIR_REGEX = r'"LDCMID":"([A-Za-z0-9\-]+)".*?"StatusReg":"([^"]+)"'
+
+def extract_corr_id(text):
+    m = re.search(DATETIME_ID_REGEX, text)
+    return m.group(1) if m else None
 
 def extract_request_id(text):
     m = re.search(REQUEST_ID_REGEX, text)
@@ -41,11 +46,8 @@ if uploaded_file:
 
     st.write("📊 Preview", df.head())
 
+    log_map = {}
     ordered_rows = []
-
-    # 🔥 context แบบเดิม
-    current_request_id = None
-    current_prostatus = None
 
     for col in df.columns:
         for val in df[col]:
@@ -53,37 +55,52 @@ if uploaded_file:
                 continue
 
             text = str(val)
+            corr_id = extract_corr_id(text)
 
-            # ✅ Request ID logic เดิม (ไหลตาม log)
+            if not corr_id:
+                continue
+
+            if corr_id not in log_map:
+                log_map[corr_id] = {
+                    "request_id": None,
+                    "prostatus": None,
+                    "pairs": []
+                }
+
+            # เก็บ request id
             req_id = extract_request_id(text)
             if req_id:
-                current_request_id = req_id
+                log_map[corr_id]["request_id"] = req_id
 
-            # ProStatus
+            # เก็บ prostatus
             ps = extract_prostatus(text)
             if ps:
-                current_prostatus = ps
+                log_map[corr_id]["prostatus"] = ps
 
-            # 🔥 extract block (device + result)
+            # เก็บ device + result (block เดียว)
             pairs = extract_pairs(text)
+            if pairs:
+                log_map[corr_id]["pairs"].extend(pairs)
 
-            for d, status in pairs:
-                ordered_rows.append({
-                    "deviceid": d,
-                    "request_id": current_request_id,   # ✅ ใช้ logic เดิม
-                    "ProStatus": current_prostatus,
-                    "Result": status if status else "-"
-                })
+            # 🔥 ถ้ามีครบ → ยิงออก
+            data = log_map[corr_id]
 
-    result_df = pd.DataFrame(ordered_rows)
+            if data["pairs"] and data["request_id"]:
+                for d, status in data["pairs"]:
+                    ordered_rows.append({
+                        "deviceid": d,
+                        "request_id": data["request_id"],
+                        "ProStatus": data["prostatus"],
+                        "Result": status if status else "-"
+                    })
 
-    # กันซ้ำ
-    result_df = result_df.drop_duplicates()
+                # กันซ้ำ
+                log_map[corr_id]["pairs"] = []
 
-    # Carrier
+    result_df = pd.DataFrame(ordered_rows).drop_duplicates()
+
     result_df["Carrier"] = result_df["deviceid"].apply(get_carrier)
 
-    # No.
     result_df = result_df.reset_index(drop=True)
     result_df.insert(0, "No.", result_df.index + 1)
 
@@ -91,7 +108,6 @@ if uploaded_file:
 
     st.dataframe(result_df)
 
-    # Download
     output = BytesIO()
     result_df.to_excel(output, index=False, engine='openpyxl')
     output.seek(0)
