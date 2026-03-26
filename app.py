@@ -5,7 +5,7 @@ import json
 from io import BytesIO
 
 st.set_page_config(page_title="ITOSE - DTEN", layout="wide")
-st.title("ITOSE Tools - DTEN + TCAP + Provisioning")
+st.title("ITOSE Tools - DTEN Summary")
 
 # =========================
 # REGEX
