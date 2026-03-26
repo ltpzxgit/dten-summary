@@ -17,7 +17,7 @@ LDCMID_BLOCK_REGEX = r'"LDCMID"\s*:\s*"([^"]+)"'
 STATUS_BLOCK_REGEX = r'"StatusReg"\s*:\s*"([^"]+)"'
 
 # =========================
-# Extract Functions
+# Extract
 # =========================
 def extract_corr_id(text):
     m = re.search(DATETIME_ID_REGEX, text)
@@ -44,7 +44,7 @@ def get_carrier(deviceid):
         return "TRUE"
 
 # =========================
-# CORE PARSER (FIX REQUEST FLOW)
+# CORE (เหมือน repo logic)
 # =========================
 def process_file(df):
 
@@ -62,23 +62,20 @@ def process_file(df):
             if not corr_id:
                 continue
 
-            # init corr_id
+            # init session
             if corr_id not in log_map:
                 log_map[corr_id] = {
-                    "request_id": None,
-                    "last_request_id": None
+                    "request_id": None
                 }
 
-            # 🔥 update request id (จำค่าล่าสุด)
+            # ✅ copy logic จาก repo
             req_id = extract_request_id(text)
             if req_id:
                 log_map[corr_id]["request_id"] = req_id
-                log_map[corr_id]["last_request_id"] = req_id
 
-            # 🔥 fallback ใช้ค่าล่าสุด ถ้าไม่มีในบรรทัดนี้
-            current_request = log_map[corr_id]["request_id"] or log_map[corr_id]["last_request_id"]
+            current_request = log_map[corr_id]["request_id"]
 
-            # extract block
+            # block extract
             ldcmid = extract_ldcmid(text)
             status = extract_status(text)
 
@@ -98,7 +95,7 @@ def process_file(df):
     result_df["DeviceID"] = result_df["DeviceID"].astype(str).str.strip()
     result_df["RequestID"] = result_df["RequestID"].astype(str).str.strip()
 
-    # dedupe
+    # dedupe (เหมือน repo)
     result_df = result_df.drop_duplicates(subset=["DeviceID", "RequestID"])
 
     # carrier
@@ -130,14 +127,10 @@ def load_file(file):
 
 
 # =========================
-# Upload
+# UI
 # =========================
 file1 = st.file_uploader("📥 Upload File", type=["xlsx", "csv"])
 
-
-# =========================
-# Main
-# =========================
 if file1:
 
     df_raw = load_file(file1)
@@ -152,7 +145,7 @@ if file1:
     st.subheader("📄 DTENLinkage Result")
     st.dataframe(result_df, use_container_width=True)
 
-    # Export
+    # export
     output = BytesIO()
 
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
