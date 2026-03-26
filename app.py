@@ -12,7 +12,7 @@ DATETIME_ID_REGEX = r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ([a-f0-9\-]{36})'
 LDCMID_REGEX = r'LDCMID=([A-Za-z0-9\-]+)'
 REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
 PROSTATUS_REGEX = r'ProStatus=([A-Za-z0-9_]+)'
-STATUSREG_REGEX = r'StatusReg=([^,}]+)'  # 🔥 เพิ่ม
+STATUSREG_REGEX = r'StatusReg[=:]"?([^",}]+)'  # 🔥 รองรับทั้ง = และ JSON
 
 def extract_corr_id(text):
     m = re.search(DATETIME_ID_REGEX, text)
@@ -70,7 +70,7 @@ if uploaded_file:
                     "deviceids": [],
                     "request_id": None,
                     "prostatus": None,
-                    "statusreg": None   # 🔥 เพิ่ม
+                    "statusreg": None
                 }
 
             # device
@@ -93,7 +93,7 @@ if uploaded_file:
             if sr:
                 log_map[corr_id]["statusreg"] = sr
 
-            # 🔥 push
+            # push
             data = log_map[corr_id]
             if data["deviceids"] and data["request_id"]:
                 for d in data["deviceids"]:
@@ -101,7 +101,7 @@ if uploaded_file:
                         "deviceid": d,
                         "request_id": data["request_id"],
                         "ProStatus": data["prostatus"],
-                        "Result": data["statusreg"]   # 🔥 ใส่ตรงนี้
+                        "Result": data["statusreg"] if data["statusreg"] else "-"  # 🔥 ตรงนี้
                     })
 
                 log_map[corr_id]["deviceids"] = []
