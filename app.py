@@ -12,6 +12,7 @@ DATETIME_ID_REGEX = r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ([a-f0-9\-]{36})'
 LDCMID_REGEX = r'LDCMID=([A-Za-z0-9\-]+)'
 REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
 PROSTATUS_REGEX = r'ProStatus=([A-Za-z0-9_]+)'
+STATUSREG_REGEX = r'StatusReg=([^,}]+)'  # 🔥 เพิ่ม
 
 def extract_corr_id(text):
     m = re.search(DATETIME_ID_REGEX, text)
@@ -27,6 +28,10 @@ def extract_request_id(text):
 def extract_prostatus(text):
     m = re.search(PROSTATUS_REGEX, text)
     return m.group(1) if m else None
+
+def extract_statusreg(text):  # 🔥 เพิ่ม
+    m = re.search(STATUSREG_REGEX, text)
+    return m.group(1).strip() if m else None
 
 def get_carrier(deviceid):
     if deviceid.startswith(("A", "Z")):
@@ -49,7 +54,6 @@ if uploaded_file:
     log_map = {}
     ordered_rows = []
 
-    # 🔥 อ่านตามลำดับจริง
     for col in df.columns:
         for val in df[col]:
             if pd.isna(val):
@@ -65,7 +69,8 @@ if uploaded_file:
                 log_map[corr_id] = {
                     "deviceids": [],
                     "request_id": None,
-                    "prostatus": None
+                    "prostatus": None,
+                    "statusreg": None   # 🔥 เพิ่ม
                 }
 
             # device
@@ -83,27 +88,30 @@ if uploaded_file:
             if ps:
                 log_map[corr_id]["prostatus"] = ps
 
-            # 🔥 ถ้าครบแล้ว → push ทันที (รักษาลำดับ)
+            # statusreg 🔥
+            sr = extract_statusreg(text)
+            if sr:
+                log_map[corr_id]["statusreg"] = sr
+
+            # 🔥 push
             data = log_map[corr_id]
             if data["deviceids"] and data["request_id"]:
                 for d in data["deviceids"]:
                     ordered_rows.append({
                         "deviceid": d,
                         "request_id": data["request_id"],
-                        "ProStatus": data["prostatus"]
+                        "ProStatus": data["prostatus"],
+                        "Result": data["statusreg"]   # 🔥 ใส่ตรงนี้
                     })
-                # กันซ้ำ
+
                 log_map[corr_id]["deviceids"] = []
 
     result_df = pd.DataFrame(ordered_rows)
 
-    # ลบซ้ำ (แต่ยังรักษา order)
     result_df = result_df.drop_duplicates()
 
-    # Carrier
     result_df["Carrier"] = result_df["deviceid"].apply(get_carrier)
 
-    # No.
     result_df = result_df.reset_index(drop=True)
     result_df.insert(0, "No.", result_df.index + 1)
 
@@ -111,7 +119,6 @@ if uploaded_file:
 
     st.dataframe(result_df)
 
-    # Download
     output = BytesIO()
     result_df.to_excel(output, index=False, engine='openpyxl')
     output.seek(0)
