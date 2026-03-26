@@ -7,12 +7,12 @@ st.set_page_config(page_title="ITOSE - DTEN", layout="wide")
 
 st.title("ITOSE Tools - DTEN Linkage")
 
-# Regex
+# Regex (🔥 FIX ให้รองรับ JSON + แบบเดิม)
 DATETIME_ID_REGEX = r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ([a-f0-9\-]{36})'
 LDCMID_REGEX = r'LDCMID[=:]"?([A-Za-z0-9\-]+)'
 REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
 PROSTATUS_REGEX = r'ProStatus=([A-Za-z0-9_]+)'
-STATUSREG_REGEX = r'StatusReg[=:]"?([^",}]+)'  # 🔥 รองรับทั้ง = และ JSON
+STATUSREG_REGEX = r'StatusReg[=:]"?([^",}]+)'  # 🔥 สำคัญ
 
 def extract_corr_id(text):
     m = re.search(DATETIME_ID_REGEX, text)
@@ -29,7 +29,7 @@ def extract_prostatus(text):
     m = re.search(PROSTATUS_REGEX, text)
     return m.group(1) if m else None
 
-def extract_statusreg(text):  # 🔥 เพิ่ม
+def extract_statusreg(text):
     m = re.search(STATUSREG_REGEX, text)
     return m.group(1).strip() if m else None
 
@@ -88,7 +88,7 @@ if uploaded_file:
             if ps:
                 log_map[corr_id]["prostatus"] = ps
 
-            # statusreg 🔥
+            # 🔥 statusreg (ตัวที่ต้องการ)
             sr = extract_statusreg(text)
             if sr:
                 log_map[corr_id]["statusreg"] = sr
