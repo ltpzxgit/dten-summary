@@ -8,32 +8,36 @@ st.set_page_config(page_title="ITOSE - DTEN", layout="wide")
 st.title("ITOSE Tools - DTEN Summary")
 
 # =========================
-# CSS (CARD UI)
+# CSS (SMOOTH CARD)
 # =========================
 st.markdown("""
 <style>
 .card {
     padding: 20px;
-    border-radius: 12px;
-    background-color: #111827;
+    border-radius: 14px;
+    background: linear-gradient(145deg, #0f172a, #111827);
     border: 1px solid #374151;
     text-align: center;
+    transition: all 0.2s ease-in-out;
+}
+.card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
 }
 .card-title {
     font-size: 14px;
     color: #9ca3af;
 }
 .card-value {
-    font-size: 40px;
+    font-size: 42px;
     font-weight: bold;
     color: white;
 }
 .card-error {
-    margin-top: 10px;
-    padding: 10px;
-    border-radius: 8px;
-    background-color: #3f1d1d;
-    color: #f87171;
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 10px;
+    font-weight: 500;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -262,23 +266,38 @@ if dten_file and tcap_file and req_file and res_file:
     res_error = len(df4[df4["ResultCode"] != "20000"])
 
     # =========================
-    # SUMMARY (CARD)
+    # CARD FUNCTION
     # =========================
-    st.markdown("### Summary")
-
-    col1, col2, col3, col4 = st.columns(4)
-
     def card(title, total, error):
-        bg = "#3f1d1d" if error > 0 else "#0f2a1d"
+        if error > 0:
+            bg = "linear-gradient(135deg, rgba(239,68,68,0.15), rgba(239,68,68,0.05))"
+            border = "rgba(239,68,68,0.4)"
+            color = "#f87171"
+        else:
+            bg = "linear-gradient(135deg, rgba(34,197,94,0.15), rgba(34,197,94,0.05))"
+            border = "rgba(34,197,94,0.4)"
+            color = "#4ade80"
+
         return f"""
         <div class="card">
             <div class="card-title">{title}</div>
             <div class="card-value">{total}</div>
-            <div class="card-error" style="background-color:{bg}">
+            <div class="card-error" style="
+                background:{bg};
+                border:1px solid {border};
+                color:{color};
+            ">
                 Error: {error}
             </div>
         </div>
         """
+
+    # =========================
+    # SUMMARY
+    # =========================
+    st.markdown("### Summary")
+
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         st.markdown(card("DTEN", dten_total, dten_error), unsafe_allow_html=True)
