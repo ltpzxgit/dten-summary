@@ -5,7 +5,7 @@ from io import BytesIO
 
 st.set_page_config(page_title="ITOSE - DTEN", layout="wide")
 
-st.title("ITOSE Tools - DTEN + TCAP + ProvisioningRequester")
+st.title("ITOSE Tools - DTEN + TCAP + Provisioning")
 
 # =========================
 # REGEX
@@ -13,12 +13,17 @@ st.title("ITOSE Tools - DTEN + TCAP + ProvisioningRequester")
 DATETIME_ID_REGEX = r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ([a-f0-9\-]{36})'
 REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
 
+# DTEN
 PAIR_REGEX = r'"LDCMID":"([A-Za-z0-9\-]+)".*?"StatusReg":"([^"]+)".*?"ResDate":"([^"]+)"'
 
+# TCAP
 TCAP_REGEX = r'"deviceId":"([^"]+)".*?"IMEI":"([^"]+)".*?"ICCID":"([^"]+)".*?"IMSI":"([^"]+)".*?"prodStatus":"([^"]+)".*?"prodDate":"([^"]+)".*?"sendDate":"([^"]+)".*?"typeStatus":"([^"]+)"'
 
-# 🔥 รองรับ multi-line JSON
+# ProvisioningRequester (multi-line)
 AIS_REGEX = r'resourceOrderId":\s*"([^"]+)".*?resourceGroupId":\s*"([^"]+)".*?resourceOrderTimeOut":\s*"([^"]+)".*?resultCode":\s*"([^"]+)".*?resultDesc":\s*"([^"]+)".*?developerMessage":\s*"([^"]*)"'
+
+# ProvisioningResponder (single-line)
+RESPONDER_REGEX = r'resourceOrderId":"([^"]+)".*?resourceGroupId":"([^"]+)".*?resultCode":"([^"]+)".*?resultDesc":"([^"]+)".*?developerMessage":"([^"]*)"'
 
 # =========================
 # FUNCTIONS
@@ -37,9 +42,11 @@ def extract_pairs(text):
 def extract_tcap(text):
     return re.findall(TCAP_REGEX, text)
 
-# 🔥 FIX: ใส่ DOTALL
 def extract_ais(text):
     return re.findall(AIS_REGEX, text, re.DOTALL)
+
+def extract_responder(text):
+    return re.findall(RESPONDER_REGEX, text)
 
 def get_carrier(deviceid):
     if deviceid.startswith(("A", "Z")):
@@ -50,7 +57,7 @@ def get_carrier(deviceid):
         return "TRUE"
 
 # =========================
-# UPLOAD 3 FILES
+# UPLOAD
 # =========================
 col1, col2, col3 = st.columns(3)
 
@@ -61,13 +68,13 @@ with col2:
     tcap_file = st.file_uploader("📥 TCAP Log", type=["xlsx", "csv"])
 
 with col3:
-    ais_file = st.file_uploader("📥 ProvisioningRequester Log", type=["xlsx", "csv"])
+    prov_file = st.file_uploader("📥 Provisioning Log", type=["xlsx", "csv"])
 
-if dten_file and tcap_file and ais_file:
+if dten_file and tcap_file and prov_file:
 
     df_dten = pd.read_csv(dten_file) if dten_file.name.endswith(".csv") else pd.read_excel(dten_file)
     df_tcap = pd.read_csv(tcap_file) if tcap_file.name.endswith(".csv") else pd.read_excel(tcap_file)
-    df_ais = pd.read_csv(ais_file) if ais_file.name.endswith(".csv") else pd.read_excel(ais_file)
+    df_prov = pd.read_csv(prov_file) if prov_file.name.endswith(".csv") else pd.read_excel(prov_file)
 
     # =========================
     # DTEN
@@ -87,10 +94,7 @@ if dten_file and tcap_file and ais_file:
                 continue
 
             if corr_id not in log_map:
-                log_map[corr_id] = {
-                    "request_id": None,
-                    "pairs": []
-                }
+                log_map[corr_id] = {"request_id": None, "pairs": []}
 
             req_id = extract_request_id(text)
             if req_id:
@@ -106,16 +110,13 @@ if dten_file and tcap_file and ais_file:
                     ordered_rows.append({
                         "DeviceID": d,
                         "Request ID": data["request_id"],
-                        "Result": status if status else "-",
-                        "Date Time": resdate if resdate else "-"
+                        "Result": status,
+                        "Date Time": resdate
                     })
-
                 log_map[corr_id]["pairs"] = []
 
     result_df = pd.DataFrame(ordered_rows).drop_duplicates()
     result_df["Carrier"] = result_df["DeviceID"].apply(get_carrier)
-    result_df = result_df.reset_index(drop=True)
-    result_df.insert(0, "No.", result_df.index + 1)
 
     # =========================
     # TCAP
@@ -140,16 +141,19 @@ if dten_file and tcap_file and ais_file:
                 })
 
     tcap_df = pd.DataFrame(tcap_rows).drop_duplicates()
-    tcap_df = tcap_df.reset_index(drop=True)
-    tcap_df.insert(0, "No.", tcap_df.index + 1)
 
     # =========================
     # ProvisioningRequester
     # =========================
-    ais_rows = []
+    req_rows = []
 
-    for col in df_ais.columns:
-        for val in df_ais[col]:
+    # =========================
+    # ProvisioningResponder
+    # =========================
+    res_rows = []
+
+    for col in df_prov.columns:
+        for val in df_prov[col]:
             if pd.isna(val):
                 continue
 
@@ -159,10 +163,9 @@ if dten_file and tcap_file and ais_file:
             if not corr_id:
                 continue
 
-            matches = extract_ais(text)
-
-            for ro_id, d, timeout, code, desc, dev_msg in matches:
-                ais_rows.append({
+            # requester (multi-line)
+            for ro_id, d, timeout, code, desc, dev_msg in extract_ais(text):
+                req_rows.append({
                     "DeviceID": d,
                     "UUID": corr_id,
                     "ResourceOrderId": ro_id,
@@ -172,23 +175,36 @@ if dten_file and tcap_file and ais_file:
                     "DeveloperMessage": dev_msg if dev_msg else "-"
                 })
 
-    ais_df = pd.DataFrame(ais_rows).drop_duplicates()
-    ais_df = ais_df.reset_index(drop=True)
-    ais_df.insert(0, "No.", ais_df.index + 1)
+            # responder (single-line)
+            for ro_id, d, code, desc, dev_msg in extract_responder(text):
+                res_rows.append({
+                    "DeviceID": d,
+                    "UUID": corr_id,
+                    "ResourceOrderId": ro_id,
+                    "ResultCode": code,
+                    "ResultDesc": desc,
+                    "DeveloperMessage": dev_msg if dev_msg else "-"
+                })
+
+    req_df = pd.DataFrame(req_rows).drop_duplicates()
+    res_df = pd.DataFrame(res_rows).drop_duplicates()
 
     # =========================
     # DISPLAY
     # =========================
-    st.subheader("📄 DTENLinkage")
+    st.subheader("DTENLinkage")
     st.dataframe(result_df)
 
-    st.subheader("📄 DTENTCAPLinkage")
+    st.subheader("DTENTCAPLinkage")
     st.dataframe(tcap_df)
 
-    st.subheader("📄 ProvisioningRequester")
-    st.dataframe(ais_df)
+    st.subheader("ProvisioningRequester")
+    st.dataframe(req_df)
 
-    st.success(f"✅ DTEN: {len(result_df)} | TCAP: {len(tcap_df)} | Provisioning: {len(ais_df)}")
+    st.subheader("ProvisioningResponder")
+    st.dataframe(res_df)
+
+    st.success(f"DTEN:{len(result_df)} | TCAP:{len(tcap_df)} | Req:{len(req_df)} | Res:{len(res_df)}")
 
     # =========================
     # EXPORT
@@ -197,13 +213,13 @@ if dten_file and tcap_file and ais_file:
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         result_df.to_excel(writer, index=False, sheet_name='DTENLinkage')
         tcap_df.to_excel(writer, index=False, sheet_name='DTENTCAPLinkage')
-        ais_df.to_excel(writer, index=False, sheet_name='ProvisioningRequester')
+        req_df.to_excel(writer, index=False, sheet_name='ProvisioningRequester')
+        res_df.to_excel(writer, index=False, sheet_name='ProvisioningResponder')
 
     output.seek(0)
 
     st.download_button(
         "📥 Download Excel",
         data=output,
-        file_name="full-linkage.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        file_name="full-linkage.xlsx"
     )
