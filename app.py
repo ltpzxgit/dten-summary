@@ -104,8 +104,6 @@ if dten_file and tcap_file and req_file and res_file:
                 log_map[cid]["pairs"] = []
 
     df1 = pd.DataFrame(rows).drop_duplicates(subset=["DeviceID","Request ID","Date Time"])
-
-    # กัน space / null
     df1["Result"] = df1["Result"].astype(str).str.strip()
 
     df1["Carrier"] = df1["DeviceID"].apply(get_carrier)
@@ -134,7 +132,6 @@ if dten_file and tcap_file and req_file and res_file:
                 })
 
     df2 = pd.DataFrame(trows).drop_duplicates(subset=["DeviceID","IMEI"])
-
     df2["TypeStatus"] = df2["TypeStatus"].astype(str).str.strip()
 
     df2 = df2.reset_index(drop=True)
@@ -163,7 +160,6 @@ if dten_file and tcap_file and req_file and res_file:
                 })
 
     df3 = pd.DataFrame(rrows).drop_duplicates(subset=["DeviceID","UUID"])
-
     df3["ResultCode"] = df3["ResultCode"].astype(str).str.strip()
 
     df3 = df3.reset_index(drop=True)
@@ -198,14 +194,13 @@ if dten_file and tcap_file and req_file and res_file:
                 continue
 
     df4 = pd.DataFrame(srows).drop_duplicates(subset=["DeviceID","UUID"])
-
     df4["ResultCode"] = df4["ResultCode"].astype(str).str.strip()
 
     df4 = df4.reset_index(drop=True)
     df4.insert(0, "No.", df4.index + 1)
 
     # =========================
-    # COUNT SUMMARY
+    # COUNT (เฉพาะ NOT SUCCESS = ERROR)
     # =========================
     dten_total = len(df1)
     dten_error = len(df1[df1["Result"] != "Process completed successfully"])
@@ -220,7 +215,7 @@ if dten_file and tcap_file and req_file and res_file:
     res_error = len(df4[df4["ResultCode"] != "20000"])
 
     # =========================
-    # DISPLAY
+    # DISPLAY TABLE
     # =========================
     st.subheader("DTENLinkage")
     st.dataframe(df1)
@@ -234,14 +229,35 @@ if dten_file and tcap_file and req_file and res_file:
     st.subheader("ProvisioningResponder")
     st.dataframe(df4)
 
-    st.success(
-        f"""
-DTEN:{dten_total} | Error:{dten_error}
-DTENTCAP:{tcap_total} | Error:{tcap_error}
-Req:{req_total} | Error:{req_error}
-Res:{res_total} | Error:{res_error}
-"""
-    )
+    # =========================
+    # DISPLAY SUMMARY (แยก block)
+    # =========================
+    st.markdown("### 📊 Summary Result")
+
+    st.success(f"""
+DTEN:
+{dten_total}
+Error:
+{dten_error}
+
+--------------
+DTENTCAP:
+{tcap_total}
+Error:
+{tcap_error}
+
+--------------
+Req:
+{req_total}
+Error:
+{req_error}
+
+--------------
+Res:
+{res_total}
+Error:
+{res_error}
+""")
 
     # =========================
     # EXPORT
