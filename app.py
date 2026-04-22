@@ -8,35 +8,25 @@ st.set_page_config(page_title="ITOSE - DTEN", layout="wide")
 st.title("ITOSE Tools - DTEN Summary")
 
 # =========================
-# CSS (🔥 SPACING + UI FIX)
+# CSS (🔥 UPGRADED STYLE)
 # =========================
 st.markdown("""
 <style>
 
-/* ===== GLOBAL SPACING ===== */
+/* ===== GLOBAL ===== */
 .block-container {
-    padding-top: 3rem;
+    padding-top: 2rem;
     padding-bottom: 2rem;
 }
 
-/* ===== HEADERS ===== */
-h2 {
-    margin-bottom: 20px !important;
-}
-
-h3 {
-    margin-top: 28px !important;
-    margin-bottom: 12px !important;
-}
-
-/* ===== CARD ===== */
+/* ===== CARD BASE ===== */
 .card {
     padding: 24px;
     border-radius: 18px;
     background: linear-gradient(145deg, #0f172a, #020617);
     border: 1px solid rgba(148, 163, 184, 0.2);
     text-align: center;
-    margin-bottom: 12px;
+    margin-bottom: 16px;
     transition: all 0.25s ease;
     box-shadow: 0 6px 20px rgba(0,0,0,0.35);
 }
@@ -47,32 +37,47 @@ h3 {
     box-shadow: 0 10px 28px rgba(0,0,0,0.55);
 }
 
+/* ===== RED CARD ===== */
 .card-red {
     padding: 24px;
     border-radius: 18px;
     background: linear-gradient(145deg, #3b0a0a, #1a0f0f);
     border: 1px solid rgba(239, 68, 68, 0.5);
     text-align: center;
-    margin-bottom: 12px;
+    margin-bottom: 16px;
     transition: all 0.25s ease;
     box-shadow: 0 6px 20px rgba(0,0,0,0.35);
 }
 
+.card-red:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 28px rgba(0,0,0,0.55);
+}
+
+/* ===== TITLE ===== */
 .card-title {
-    font-size: 14px;
+    font-size: 15px;
     color: #9ca3af;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
+    letter-spacing: 0.3px;
 }
 
+/* ===== VALUE ===== */
 .card-value {
-    font-size: 50px;
-    font-weight: bold;
-    color: white;
+    font-size: 52px;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: 1px;
 }
 
-/* ===== GAP BETWEEN COLUMN ITEMS ===== */
-div[data-testid="column"] {
-    gap: 12px !important;
+/* ===== FIX COLUMN GAP ===== */
+div[data-testid="column"] > div {
+    margin-bottom: 10px;
+}
+
+/* ===== SUMMARY TITLE ===== */
+h2 {
+    margin-bottom: 20px !important;
 }
 
 </style>
@@ -180,29 +185,28 @@ def render_summary():
     with summary_placeholder.container():
         st.markdown("## Summary")
 
-        r1 = st.columns(4)
+        c1, c2, c3, c4 = st.columns(4)
 
-        with r1[0]:
+        with c1:
             st.markdown(card("DTEN", dten_total, dten_error > 0), unsafe_allow_html=True)
-        with r1[1]:
+        with c2:
             st.markdown(card("DTENTCAP", tcap_total, tcap_error > 0), unsafe_allow_html=True)
-        with r1[2]:
+        with c3:
             st.markdown(card("ProvisioningRequester", req_total, req_error > 0), unsafe_allow_html=True)
-        with r1[3]:
+        with c4:
             st.markdown(card("ProvisioningResponder", res_total, res_error > 0), unsafe_allow_html=True)
 
-        # spacing แบบ FDF
-        st.markdown("<div style='margin-bottom: 16px;'></div>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
 
-        r2 = st.columns(4)
+        c5, c6, c7, c8 = st.columns(4)
 
-        with r2[0]:
-            st.markdown(card("TRUE", true_total), unsafe_allow_html=True)
-        with r2[1]:
-            st.markdown(card("AIS", ais_total), unsafe_allow_html=True)
-        with r2[2]:
+        with c5:
+            st.markdown(card("TRUE", true_total, False), unsafe_allow_html=True)
+        with c6:
+            st.markdown(card("AIS", ais_total, False), unsafe_allow_html=True)
+        with c7:
             st.markdown(card("Requester Error", len(df7), len(df7) > 0), unsafe_allow_html=True)
-        with r2[3]:
+        with c8:
             st.markdown(card("Responder Error", len(df8), len(df8) > 0), unsafe_allow_html=True)
 
 render_summary()
@@ -256,8 +260,6 @@ if dten_file:
     ais_total = len(df1[df1["Carrier"] == "AIS"])
 
     render_summary()
-
-    st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
     st.subheader("DTENLinkage")
     st.dataframe(df1.style.apply(highlight_error_dten, axis=1))
 
@@ -292,8 +294,6 @@ if tcap_file:
     tcap_error = len(df2[df2["TypeStatus"] != "OK"])
 
     render_summary()
-
-    st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
     st.subheader("DTENTCAPLinkage")
     st.dataframe(df2.style.apply(highlight_error_tcap, axis=1))
 
@@ -331,8 +331,6 @@ if req_file:
     req_error = len(df7)
 
     render_summary()
-
-    st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
     st.subheader("ProvisioningRequester")
     st.dataframe(df3.style.apply(highlight_error_req, axis=1))
 
@@ -376,8 +374,6 @@ if res_file:
     res_error = len(df8)
 
     render_summary()
-
-    st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
     st.subheader("ProvisioningResponder")
     st.dataframe(df4.style.apply(highlight_error_res, axis=1))
 
@@ -385,12 +381,10 @@ if res_file:
 # ERROR TABLE
 # =========================
 if not df7.empty:
-    st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
     st.subheader("ProvisioningRequester Error")
     st.dataframe(df7)
 
 if not df8.empty:
-    st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
     st.subheader("ProvisioningResponder Error")
     st.dataframe(df8)
 
