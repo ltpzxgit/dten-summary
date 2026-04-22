@@ -7,64 +7,44 @@ from io import BytesIO
 st.set_page_config(page_title="ITOSE - DTEN", layout="wide")
 st.title("ITOSE Tools - DTEN Summary")
 
+# =========================
+# CSS (🔥 NEW STYLE)
+# =========================
 st.markdown("""
 <style>
-
-/* Layout */
-.block-container {
-    padding-top: 2rem;
-}
-
-/* Card base */
-.card, .card-red {
-    padding: 28px;
-    border-radius: 20px;
-    text-align: center;
-    margin-bottom: 14px;
-    transition: all 0.2s ease;
-}
-
-/* Normal card */
 .card {
-    background: linear-gradient(145deg, #0b1f3a, #0f172a);
+    padding: 28px;
+    border-radius: 18px;
+    background: linear-gradient(145deg, #0b1a33, #0f172a);
     border: 1px solid rgba(148,163,184,0.2);
+    text-align: center;
+    transition: 0.2s ease;
 }
 
-/* Error card */
-.card-red {
-    background: linear-gradient(145deg, #3b0a0a, #450a0a);
-    border: 1px solid #dc2626;
-}
-
-/* Hover effect */
-.card:hover, .card-red:hover {
-    transform: translateY(-3px);
+.card:hover {
+    transform: translateY(-2px);
     border: 1px solid rgba(148,163,184,0.4);
 }
 
-/* Title */
 .card-title {
     font-size: 16px;
     color: #94a3b8;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
 }
 
-/* Value */
 .card-value {
-    font-size: 58px;
+    font-size: 56px;
     font-weight: 700;
-    color: #f8fafc;
-    letter-spacing: 1px;
+    color: white;
 }
 
-/* Divider */
-hr {
-    border: none;
-    height: 1px;
-    background: rgba(148,163,184,0.2);
-    margin: 20px 0;
+.card-red {
+    padding: 28px;
+    border-radius: 18px;
+    background: linear-gradient(145deg, #3b0a0a, #450a0a);
+    border: 1px solid #dc2626;
+    text-align: center;
 }
-
 </style>
 """, unsafe_allow_html=True)
 
