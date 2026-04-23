@@ -177,13 +177,13 @@ df7 = pd.DataFrame()
 df8 = pd.DataFrame()
 
 # =========================
-# DTEN - SUMMARY
+# SUMMARY
 # =========================
 summary_placeholder = st.empty()
 
 def render_summary():
     with summary_placeholder.container():
-        st.markdown("## Summary")
+        st.markdown("## DTEN - Summary")
 
         c1, c2, c3, c4 = st.columns(4)
 
