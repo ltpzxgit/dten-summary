@@ -384,7 +384,7 @@ if not df7.empty:
     st.dataframe(df7)
 
 if not df8.empty:
-    st.subheader("ProvisioningResponder Error")
+    st.subheader("Responder Error")
     st.dataframe(df8)
 
 # =========================
